@@ -1,0 +1,102 @@
+@import 'tailwindcss';
+
+html {
+  scroll-behavior: smooth;
+}
+
+@theme {
+  --color-accent: #BFE8FF;
+  --color-primary: #0035A9;
+  --color-secondary: #E56C27;
+}
+
+@utility btn-primary {
+  @apply font-semibold cursor-pointer px-10 bg-blue-500 text-white py-2 rounded-lg;
+  
+  & button{
+    @apply cursor-pointer;
+  }
+}
+
+@utility horizontal-layout-navbar {
+  @apply flex items-center w-full p-3 sticky justify-between top-2 z-50 transition-all duration-300;
+}
+
+@utility navbar-stuck {
+  @apply bg-neutral-200/70 backdrop-blur-md shadow-sm border-white/20 rounded-2xl;
+}
+@utility mission-vision-layout{
+  @apply grid gap-2 grid-cols-1 lg:grid-cols-2;
+}
+@utility card-border{
+  @apply border border-gray-200 rounded-lg p-5;
+}
+@utility button{
+  @apply cursor-pointer;
+}
+@utility input-layout{
+  @apply w-full flex gap-2 items-center p-2 rounded-lg border border-gray-200 bg-gray-50/50;
+}
+@utility button-toogle-layout{
+  @apply flex gap-2 items-center  bg-accent/50 justify-center p-1 rounded-lg;
+}
+@utility button-toogle{
+  @apply px-2 font-semibold text-sm bg-transparent w-full rounded-md py-2 cursor-pointer;
+}
+@utility button-toogle-active{
+  @apply bg-white shadow-md text-primary;
+}
+
+@keyframes slideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@utility animate-slide-left {
+  animation: slideLeft 0.3s ease-out forwards;
+}
+
+@utility glass-card {
+  @apply bg-white/20 backdrop-blur-2xl border border-white/20 shadow-xl rounded-lg p-2;
+}
+@utility vertical-nav-layout {
+  @apply fixed bottom-0 left-0 w-full h-auto z-50 lg:sticky lg:top-0 lg:h-screen lg:w-64 shrink-0 flex flex-1 flex-col lg:overflow-y-auto bg-white/90 backdrop-blur-lg border-t lg:border-t-0 lg:border-r border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] lg:shadow-none pb-[env(safe-area-inset-bottom)];
+}
+
+@utility vertical-nav {
+  @apply flex flex-row md:flex-col gap-1 w-full justify-between md:justify-start px-2 py-2 md:p-4 overflow-x-auto md:overflow-visible;
+}
+
+@utility vertical-nav-link {
+  @apply flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-2 md:px-4 md:py-3 rounded-xl transition-all duration-300;
+}
+
+@utility vertical-nav-link-active {
+  @apply bg-primary/10 text-primary shadow-none font-semibold;
+}
+
+@utility vertical-nav-link-inactive {
+  @apply text-gray-500 hover:bg-primary/10 hover:text-primary;
+}
+@utility drawer-card {
+  @apply bg-neutral-200/30 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-6 transition-all duration-300;
+}
+
+@utility navheader-cards {
+  @apply bg-neutral-200/40  backdrop-blur-2xl border border-neutral-200 rounded-full flex gap-2 items-center py-2 px-10;
+}
+@utility navheader-button{
+  @apply bg-neutral-200/40 text-gray-500 backdrop-blur-2xl border border-neutral-200 rounded-full flex gap-2 items-center p-2 ;
+}
+@utility modal-layout{
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4;
+}
+@utility account-information-layout{
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-8;
+}
