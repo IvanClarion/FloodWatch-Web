@@ -36,7 +36,6 @@ export default function page() {
       <ScrollReveal delay={0}>
         <Footer/>
       </ScrollReveal>
-      
     </main>
     </>
   )

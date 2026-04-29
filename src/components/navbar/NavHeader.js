@@ -13,7 +13,7 @@ export default function NavHeader() {
             </div>
             <div className="navheader-button">
                 
-                <Bell className="size-5"/>   
+                <Bell className="size-5 text-primary"/>   
             </div>
         </div>
     </section>

@@ -1,4 +1,4 @@
-import AccountEditForm from "../components/account/AccountEditForm"
+import AccountEditForm from "@/components/account/AccountEditForm"
 
 export default function AccountEditPage() {
   return (

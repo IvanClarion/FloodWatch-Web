@@ -14,7 +14,7 @@ export default function LoginLayout({ children }) {
           <AdminNav/>
           
         </div>
-          <section className="flex-1 w-full gap-5 p-2 flex flex-col pb-24 lg:pb-2">
+          <section className="flex-1 bg-accent/20 w-full gap-5 p-2 flex flex-col pb-24 lg:pb-2">
           <NavHeader/>
           {children}
           </section>

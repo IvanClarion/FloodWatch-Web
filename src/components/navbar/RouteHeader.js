@@ -32,7 +32,7 @@ export default function RouteHeader() {
   }
 
   return (
-     <div className="navheader-cards">
+     <div className="navheader-cards ">
         <CardSubHeader>{getRouteName()}</CardSubHeader>
     </div>
   )
