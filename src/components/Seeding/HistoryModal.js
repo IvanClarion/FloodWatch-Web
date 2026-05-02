@@ -4,7 +4,6 @@ import { X } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import HistoryLazyItem from "./HistoryLazyItem"
-
 export default async function HistoryModal() {
   // Use the service role key to bypass RLS on the server
   const supabase = createClient(
@@ -26,11 +25,11 @@ export default async function HistoryModal() {
 
   return (
     <SideModal>
-        <div className="flex gap-3 w-full items-center sticky top-0 bg-white p-5 z-10">
-            <Link href="?" className="p-1 hover:bg-gray-200/50 rounded-full transition-colors cursor-pointer">
-                <X className="w-5 h-5 text-gray-600" />
+        <div className="flex gap-3 w-full items-center sticky top-0 bg-white  p-6 z-10">
+            <Link href="?" className="modal-icon-button">
+                <X className="w-4 h-4 text-gray-600" />
             </Link>
-            <CardHeader>Telemetry History</CardHeader>
+            <CardHeader className="text-lg">Telemetry History</CardHeader>
         </div>
         
         <div className="flex flex-col gap-2 p-5 overflow-y-auto">

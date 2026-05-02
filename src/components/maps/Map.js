@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState } from 'react';
 import Map, { Marker, Popup, NavigationControl } from 'react-map-gl/mapbox';
-import CircleSkeleton from '@/components/skeleton/CircleSkeleton';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/supabase/util/supabase'; 
 
@@ -73,11 +72,9 @@ export default function FloodWatchMap() {
             }}
           >
             {/* The Dot on the map */}
-            <Suspense fallback={<CircleSkeleton />}>
-              <div 
-                className={getColor(muni.rainfall_mm)}
-              />
-            </Suspense>
+            <div 
+              className={getColor(muni.rainfall_mm)}
+            />
           </Marker>
         ))}
 

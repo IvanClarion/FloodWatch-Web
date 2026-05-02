@@ -77,7 +77,7 @@ export default function HNavBar() {
                         <Link href="#features" className="block w-full py-1 font-medium hover:text-primary transition-colors" onClick={() => setIsMobileMenuOpen(false)}>Features</Link>
                     </li>
                     <li className="w-full pt-4 border-t border-gray-200">
-                        <button className="btn-primary w-full max-w-[200px]" onClick={() => setIsMobileMenuOpen(false)}>Sign In</button>
+                        <Link href='/login' className="btn-primary">Sign In</Link>
                     </li>
                 </ul>
             </div>

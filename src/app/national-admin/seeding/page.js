@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import SeedTable from "@/components/table/national-admin/SeedTable"
 import SeedCard from "@/components/Seeding/SeedCard"
-import SeedCardSkeleton from "@/components/Seeding/SeedCardSkeleton"
+import SquareSkeleton from '@/components/skeleton/SquareSkeleton'
 import ImportAreas from "@/components/Seeding/ImportAreas"
 import HistoryModal from "@/components/Seeding/HistoryModal"
 import { createClient } from '@supabase/supabase-js'
@@ -48,7 +48,7 @@ export default async function page(props) {
   return (
     <section className="grid gap-5">
       <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4">
-        <Suspense fallback={<SeedCardSkeleton />}>
+        <Suspense fallback={<SquareSkeleton />}>
           <SeedCard />
         </Suspense>
         <ImportAreas/>
