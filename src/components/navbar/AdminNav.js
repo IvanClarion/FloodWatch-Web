@@ -3,7 +3,7 @@ import VerticalLayout from "./VerticalLayout"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/supabase/util/supabase"
-import { LayoutDashboard, FileText, LineChart, Users, Map, UserCircle, LogOut } from "lucide-react"
+import { LayoutDashboard, FileText, LineChart, Users, Map, Activity } from "lucide-react"
 import DrawerCard from "../cards/DrawerCard"
 import AccountButton from "../button/AccountButton"
 import { useState, useEffect } from "react"
@@ -61,7 +61,7 @@ export default function AdminNav() {
 
   const navItems = [
     { name: 'Dashboard', href: '/national-admin/dashboard', icon: LayoutDashboard },
-    { name: 'Logs', href: '/national-admin/Logs', icon: FileText },
+    { name: 'Logs', href: '/national-admin/Logs/api', basePath: '/national-admin/Logs', icon: Activity },
     { name: 'Analytics', href: '/national-admin/analytics', icon: LineChart },
     { name: 'Contributors', href: '/national-admin/contributor', icon: Users },
     { name: 'Seeding', href: '/national-admin/seeding', icon: Map },
@@ -82,8 +82,9 @@ export default function AdminNav() {
           <ul className="vertical-nav">
             {navItems.map((item) => {
               const Icon = item.icon
+              const matchPath = item.basePath || item.href
               // Active if pathname matches exactly or if we are in a subpath of it
-              const isActive = pathname === item.href || (pathname?.startsWith(item.href) && item.href !== '/national-admin')
+              const isActive = pathname === item.href || (pathname?.startsWith(matchPath) && matchPath !== '/national-admin')
               
               return (
                 <li key={item.name} className="flex-1 md:flex-none">

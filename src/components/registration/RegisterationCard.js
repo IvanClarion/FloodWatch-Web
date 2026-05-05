@@ -7,7 +7,7 @@ import CardSubHeader from "../cards/CardSubHeader"
 import CardBasedText from "../cards/CardBasedText"
 import CardHeader from "../cards/CardHeader"
 import Form from "./Form"
-export default function RegistrationCard() {
+export default function RegistrationCard({ invitation }) {
   return (
     <div className="w-full max-w-6xl mx-auto animate-slide-left py-10 px-4">
       <GeneralCard className="py-0 px-0 border-0 overflow-hidden shadow-[0_40px_100px_-20px_rgba(0,0,0,0.15)] bg-white/70 backdrop-blur-2xl grid grid-cols-1 lg:grid-cols-12  rounded-[2.5rem]">
@@ -74,7 +74,7 @@ export default function RegistrationCard() {
                   </div>
                   </div>
             <div>
-              <Form/> 
+              <Form invitation={invitation}/> 
             </div>
 
           </div>

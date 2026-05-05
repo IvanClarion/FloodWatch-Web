@@ -13,8 +13,8 @@ html {
 @utility btn-primary {
   @apply text-sm font-semibold cursor-pointer px-10 bg-blue-500 text-white py-3 rounded-lg;
   
-  & button{
-    @apply cursor-pointer;
+  &:disabled {
+    @apply bg-gray-300 text-gray-500 cursor-not-allowed shadow-none;
   }
 }
 @utility btn-secondary {
@@ -44,10 +44,10 @@ html {
   @apply w-full flex gap-2 items-center p-2 rounded-lg border border-gray-200 bg-gray-50/50;
 }
 @utility button-toogle-layout{
-  @apply flex gap-2 items-center  bg-accent/50 justify-center p-1 rounded-lg;
+  @apply flex gap-2 items-center  bg-gray-100 justify-center p-1 rounded-lg;
 }
 @utility button-toogle{
-  @apply px-2 font-semibold text-sm bg-transparent w-full rounded-md py-2 cursor-pointer;
+  @apply px-2 font-semibold text-sm bg-transparent w-full rounded-md py-2 cursor-pointer text-gray-500;
 }
 @utility button-toogle-active{
   @apply bg-white  text-primary;
@@ -95,10 +95,10 @@ html {
 }
 
 @utility navheader-cards {
-  @apply bg-neutral-200/40  backdrop-blur-2xl border border-neutral-200 rounded-full flex gap-2 items-center py-2 px-10;
+  @apply bg-white/60  backdrop-blur-2xl border border-neutral-200 rounded-full flex gap-2 items-center py-2 px-10;
 }
 @utility navheader-button{
-  @apply bg-neutral-200/40 text-gray-500 backdrop-blur-2xl border border-neutral-200 rounded-full flex gap-2 items-center p-2 ;
+  @apply bg-white/60 text-primary backdrop-blur-2xl border border-neutral-200 rounded-full flex gap-2 items-center p-2 ;
 }
 @utility modal-layout{
   @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4;
@@ -310,4 +310,7 @@ html {
 
 @utility animate-float {
   animation: float 3s ease-in-out infinite;
+}
+@utility info-card{
+  @apply bg-gray-100 rounded-lg p-2;
 }

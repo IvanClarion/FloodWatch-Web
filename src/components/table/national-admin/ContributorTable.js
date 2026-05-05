@@ -17,13 +17,14 @@ import TableBadge from "../TableBadge"
 import SingleLineSkeleton from "@/components/skeleton/SingleLineSkeleton"
 import PrimaryButton from "@/components/button/PrimaryButton"
 import InviteUserModal from "@/components/contributors/InviteUserModal"
+import UserModal from "@/app/national-admin/contributor/UserModal"
 import { UserPlus } from "lucide-react"
 
 const TABS = ["All", "Pending", "Accepted"]
 
 
 // ── Lazy Row with IntersectionObserver ──
-function LazyRow({ row, scrollRoot }) {
+function LazyRow({ row, scrollRoot, onViewDetails }) {
   const [state, setState] = useState("hidden")
   const ref = useRef(null)
 
@@ -105,7 +106,7 @@ function LazyRow({ row, scrollRoot }) {
 
           {/* Action */}
           <TableDataAction>
-            <button className="table-action-btn">
+            <button className="table-action-btn" onClick={() => onViewDetails(row.id)}>
               <ChevronRight className="w-4 h-4" />
             </button>
           </TableDataAction>
@@ -121,6 +122,7 @@ export default function ContributorTable({ title = "Contributors" }) {
   const [activeTab, setActiveTab] = useState("All")
   const [search, setSearch] = useState("")
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [selectedInviteId, setSelectedInviteId] = useState(null)
   const scrollRef = useRef(null)
 
   // Fetch invitations from Supabase
@@ -199,7 +201,7 @@ export default function ContributorTable({ title = "Contributors" }) {
           <tbody>
             {filtered.length > 0 ? (
               filtered.map((row) => (
-                <LazyRow key={row.id} row={row} scrollRoot={scrollRef.current} />
+                <LazyRow key={row.id} row={row} scrollRoot={scrollRef.current} onViewDetails={setSelectedInviteId} />
               ))
             ) : (
               <tr>
@@ -213,6 +215,7 @@ export default function ContributorTable({ title = "Contributors" }) {
       </TableScrollWrapper>
     </Table>
     {showInviteModal && <InviteUserModal onClose={() => setShowInviteModal(false)} />}
+    {selectedInviteId && <UserModal invitationId={selectedInviteId} onClose={() => setSelectedInviteId(null)} />}
     </>
   )
 }

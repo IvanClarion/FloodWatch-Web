@@ -1,23 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import FloatingModal from "../Modal/FloatingModal"
 import GeneralCard from "../cards/GeneralCard"
 import CardHeader from "../cards/CardHeader"
 import CardBasedText from "../cards/CardBasedText"
 import GeneralInput from "../forms/GeneralInput"
 import PrimaryButton from "../button/PrimaryButton"
-import { X, Mail, MapPin, ShieldCheck, Send, Landmark, Check, Loader2 } from "lucide-react"
+import { X, Mail, MapPin, ShieldCheck, Send, Landmark, Check, Loader2, ChevronDown } from "lucide-react"
 import { supabase } from "@/supabase/util/supabase"
 
-const ROLES = [
+const ROLES = [  
   {
-    value: "LGU Headmaster",
+    value: "lgu_headmaster", // What goes to Supabase
+    label: "LGU Headmaster", // What the Admin sees on screen
     icon: ShieldCheck,
     description: "Manages local flood monitoring and alerts",
   },
   {
-    value: "Provincial Admin",
+    value: "provincial_admin", // What goes to Supabase
+    label: "Provincial Admin", // What the Admin sees on screen
     icon: Landmark,
     description: "Oversees province-wide disaster operations",
   },
@@ -30,6 +32,28 @@ export default function InviteUserModal({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [provinces, setProvinces] = useState([])
+  const [loadingProvinces, setLoadingProvinces] = useState(true)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  useEffect(() => {
+    async function fetchProvinces() {
+      try {
+        const { data, error } = await supabase
+          .from('province')
+          .select('name')
+          .order('name')
+        
+        if (error) throw error
+        setProvinces(data || [])
+      } catch (err) {
+        console.error("Error fetching provinces:", err)
+      } finally {
+        setLoadingProvinces(false)
+      }
+    }
+    fetchProvinces()
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -88,7 +112,15 @@ export default function InviteUserModal({ onClose }) {
 
       if (insertError) throw insertError
 
-      // Try sending the email via an API route (stub for now, needs real implementation later)
+      // Log to browser console for easy access during testing
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      const inviteUrl = `${baseUrl}/register/provincial/${inviteCode}`
+      console.log('%c=============================================', 'color: #0035A9; font-weight: bold')
+      console.log('%c📨 TESTING PHASE - INVITE LINK GENERATED:', 'color: #0035A9; font-weight: bold; font-size: 14px')
+      console.log(`%c${inviteUrl}`, 'color: #16a34a; font-weight: bold; font-size: 14px; text-decoration: underline')
+      console.log('%c=============================================', 'color: #0035A9; font-weight: bold')
+
+      // Try sending the email via an API route
       try {
         await fetch('/api/send-invite-email', {
           method: 'POST',
@@ -168,17 +200,54 @@ export default function InviteUserModal({ onClose }) {
                 </div>
 
                 {/* LGU / Province */}
-                <div className="grid gap-1.5">
+                <div className="grid gap-1.5 relative">
                     <CardBasedText className="text-sm font-semibold">LGU / Province Name</CardBasedText>
-                    <GeneralInput 
-                        type="text" 
-                        placeholder="e.g. Cebu City"
-                        required
-                        value={lguName}
-                        onChange={(e) => setLguName(e.target.value)}
+                    <button
+                        type="button"
+                        onClick={() => setDropdownOpen(!dropdownOpen)}
+                        disabled={loadingProvinces}
+                        className={`input-layout transition-all duration-200 w-full flex items-center justify-between cursor-pointer ${loadingProvinces ? 'bg-gray-100 border-gray-100 opacity-70 cursor-not-allowed select-none' : 'hover:border-gray-300 focus:border-primary/50 focus:ring-2 focus:ring-primary/10'}`}
                     >
-                        <MapPin className="size-5 text-gray-400" />
-                    </GeneralInput>
+                        <div className="flex items-center gap-2">
+                            {loadingProvinces ? <Loader2 className="size-5 text-gray-400 animate-spin" /> : <MapPin className="size-5 text-gray-400" />}
+                            <span className={`text-sm ${lguName ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
+                                {loadingProvinces ? "Loading provinces..." : (lguName || "Select a province")}
+                            </span>
+                        </div>
+                        <ChevronDown className={`size-4 text-gray-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Custom Dropdown Menu */}
+                    {dropdownOpen && !loadingProvinces && (
+                        <>
+                            {/* Backdrop to close dropdown when clicking outside */}
+                            <div 
+                                className="fixed inset-0 z-40" 
+                                onClick={() => setDropdownOpen(false)}
+                            />
+                            
+                            <div className="absolute top-full left-0 mt-2 w-full max-h-56 overflow-y-auto bg-white/80 backdrop-blur-2xl border border-gray-100 shadow-xl rounded-xl z-50 p-1.5 flex flex-col gap-0.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                                {provinces.map((prov) => (
+                                    <button
+                                        key={prov.name}
+                                        type="button"
+                                        onClick={() => {
+                                            setLguName(prov.name)
+                                            setDropdownOpen(false)
+                                        }}
+                                        className={`flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg text-left transition-colors cursor-pointer ${lguName === prov.name ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                    >
+                                        <MapPin className={`size-4 ${lguName === prov.name ? 'text-primary' : 'text-gray-400'}`} />
+                                        {prov.name}
+                                        {lguName === prov.name && <Check className="size-4 ml-auto text-primary" />}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                    
+                    {/* Hidden input for HTML5 required validation */}
+                    <input type="text" name="lguName" value={lguName} required readOnly className="sr-only" />
                 </div>
 
                 {/* Role Picker */}
@@ -214,7 +283,7 @@ export default function InviteUserModal({ onClose }) {
                                         <Icon className="size-5" />
                                     </span>
                                     <span className={`text-sm font-semibold ${isSelected ? "text-primary" : "text-gray-700"}`}>
-                                        {role.value}
+                                        {role.label}
                                     </span>
                                     <span className="text-[11px] text-gray-400 text-center leading-tight">
                                         {role.description}
