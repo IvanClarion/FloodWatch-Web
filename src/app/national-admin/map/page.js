@@ -12,14 +12,16 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState('Risk Mapping');
 
   return (
-    <section className="grid gap-5 mt-2">
+    <section className="grid relative gap-5 mt-2">
       <div className="flex justify-between">
         <MapToggleSwitch activeTab={activeTab} onTabChange={setActiveTab} />
         <MapsDocumentation/>
       </div>
+      
       <Suspense fallback={<MapSkeleton />}>
         {activeTab === 'Risk Mapping' ? <Map /> : <WeatherMap />}
       </Suspense>
+      
     </section>
   )
 }

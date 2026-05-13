@@ -12,6 +12,9 @@ import { supabase } from "@/supabase/util/supabase"
 export default function UserModal({ invitationId, onClose }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState(false)
+  const [resendError, setResendError] = useState(null)
   
   useEffect(() => {
     async function fetchData() {
@@ -103,8 +106,56 @@ export default function UserModal({ invitationId, onClose }) {
   if (status === "accepted") statusBannerClass = "default-banner-green"
   if (status === "expired") statusBannerClass = "default-banner-red"
 
-  // Check if button should be disabled
-  const isResendDisabled = status === "pending" || status === "accepted"
+  // Disabled for pending (already sent) and accepted (already used) — only expired can be resent
+  const isResendDisabled = status === "pending" || status === "accepted" || resendLoading
+
+  const handleResend = async () => {
+    setResendLoading(true)
+    setResendError(null)
+    setResendSuccess(false)
+    try {
+      const newCode = crypto.randomUUID()
+      const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+      const { error: updateError } = await supabase
+        .from("invitations")
+        .update({
+          status: "pending",
+          invite_code: newCode,
+          expires_at: newExpiry,
+        })
+        .eq("id", invitation.id)
+
+      if (updateError) throw updateError
+
+      // Try sending the email
+      try {
+        await fetch("/api/send-invite-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: invitation.official_email,
+            lguName: invitation.lgu_name,
+            role: invitation.account_role,
+            inviteCode: newCode,
+          }),
+        })
+      } catch (emailErr) {
+        console.error("Failed to send resend email:", emailErr)
+      }
+
+      // Update local state so the banner and button reflect the new status
+      setData((prev) => ({
+        ...prev,
+        invitation: { ...prev.invitation, status: "pending", invite_code: newCode, expires_at: newExpiry },
+      }))
+      setResendSuccess(true)
+    } catch (err) {
+      setResendError(err.message || "Failed to resend invitation.")
+    } finally {
+      setResendLoading(false)
+    }
+  }
 
   // Inviter Data
   const inviterEmail = inviter?.email || "Unknown"
@@ -205,10 +256,22 @@ export default function UserModal({ invitationId, onClose }) {
                         </div>
                     </div>
 
+                    {/* Feedback messages */}
+                    {resendSuccess && (
+                      <p className="text-xs text-green-600 font-medium text-center">Invitation resent successfully!</p>
+                    )}
+                    {resendError && (
+                      <p className="text-xs text-red-500 font-medium text-center">{resendError}</p>
+                    )}
+
                     {/* Action Button */}
                     <div className="pt-2">
-                        <PrimaryButton disabled={isResendDisabled} className="w-full py-2.5 shadow-sm">
-                            Resend Invitation
+                        <PrimaryButton
+                          disabled={isResendDisabled}
+                          onClick={handleResend}
+                          className="w-full py-2.5 shadow-sm flex items-center justify-center gap-2"
+                        >
+                            {resendLoading ? "Resending..." : "Resend Invitation"}
                         </PrimaryButton>
                     </div>
                 </div>

@@ -178,6 +178,26 @@ html {
 @utility summary-data-icon{
   @apply rounded-full text-primary bg-primary/10 p-2 w-fit;
 }
+@utility summary-data-icon-red{
+  @apply rounded-full text-red-500 bg-red-500/10 p-2 w-fit;
+}
+@utility summary-data-icon-green{
+  @apply rounded-full text-green-500 bg-green-500/10 p-2 w-fit;
+}
+@utility summary-data-icon-amber{
+  @apply rounded-full text-amber-500 bg-amber-500/10 p-2 w-fit;
+}
+
+@utility summary-data-icon-yellow{
+  @apply rounded-full text-yellow-500 bg-yellow-500/10 p-2 w-fit;
+}
+
+@utility summary-data-icon-orange{
+  @apply rounded-full text-orange-500 bg-orange-500/10 p-2 w-fit;
+}
+@utility summary-data-icon-purple{
+  @apply rounded-full text-purple-500 bg-purple-500/10 p-2 w-fit;
+}
 @keyframes mapPinFlicker {
   0% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 80%, transparent);
@@ -312,5 +332,5 @@ html {
   animation: float 3s ease-in-out infinite;
 }
 @utility info-card{
-  @apply bg-gray-100 rounded-lg p-2;
+  @apply bg-white border border-gray-200/60 shadow-sm rounded-xl p-5 flex flex-col gap-5;
 }

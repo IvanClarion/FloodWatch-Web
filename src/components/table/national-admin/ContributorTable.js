@@ -93,11 +93,13 @@ function LazyRow({ row, scrollRoot, onViewDetails }) {
 
           {/* Status */}
           <TableData>
-            <TableBadge className={isAccepted
+            <TableBadge className={row.status === "accepted"
               ? "bg-green-50 text-green-600"
-              : "bg-orange-50 text-orange-500"
+              : row.status === "expired"
+                ? "bg-red-50 text-red-500"
+                : "bg-orange-50 text-orange-500"
             }>
-              {isAccepted ? "ACCEPTED" : "PENDING"}
+              {row.status === "accepted" ? "ACCEPTED" : row.status === "expired" ? "EXPIRED" : "PENDING"}
             </TableBadge>
           </TableData>
 

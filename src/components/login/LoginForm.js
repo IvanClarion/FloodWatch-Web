@@ -10,6 +10,7 @@ import GeneralInput from "../forms/GeneralInput"
 import PrimaryButton from "../button/PrimaryButton"
 import ToogleButtonLayout from "../button/ToogleButtonLayout"
 import ToogleButton from "../button/ToogleButton"
+import { checkIpSecurity } from "@/vpnio/Detector"
 
 export default function LoginForm() {
   const [activeAdmin, setActiveAdmin] = useState('national');
@@ -34,6 +35,64 @@ export default function LoginForm() {
 
       if (authError) {
         throw authError;
+      }
+
+      let exactIp = null;
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        exactIp = ipData.ip;
+      } catch (err) {
+        console.warn("Could not fetch exact IP from client side:", err);
+      }
+
+      const securityCheck = await checkIpSecurity(exactIp);
+      
+      const ua = navigator.userAgent;
+      let os = "Unknown OS";
+      if (ua.includes("Win")) {
+        if (ua.includes("Windows NT 10.0")) os = "Windows 10";
+        else if (ua.includes("Windows NT 6.3")) os = "Windows 8.1";
+        else if (ua.includes("Windows NT 6.2")) os = "Windows 8";
+        else if (ua.includes("Windows NT 6.1")) os = "Windows 7";
+        else os = "Windows";
+      } else if (ua.includes("Mac")) os = "MacOS";
+      else if (ua.includes("Android")) os = "Android";
+      else if (ua.includes("like Mac")) os = "iOS";
+      else if (ua.includes("Linux")) os = "Linux";
+
+      let browser = "Unknown Browser";
+      if (ua.includes("Edg")) browser = "Edge";
+      else if (ua.includes("OPR") || ua.includes("Opera")) browser = "Opera";
+      else if (ua.includes("Chrome")) browser = "Chrome";
+      else if (ua.includes("Firefox")) browser = "Firefox";
+      else if (ua.includes("Safari")) browser = "Safari";
+      else if (ua.includes("Trident")) browser = "Internet Explorer";
+
+      const deviceInfo = `${os}, ${browser}`;
+
+      let status = 'success';
+      let blockReason = null;
+
+      if (securityCheck.isVpn) {
+         status = 'blocked';
+         blockReason = 'VPN/Proxy/Tor Detected';
+      }
+
+      await supabase.from('login_logs').insert([{
+         user_id: data.user.id,
+         device_info: deviceInfo,
+         ip_address: securityCheck.ip,
+         status: status,
+         login_location: securityCheck.region,
+         is_vpn: securityCheck.isVpn,
+         block_reason: blockReason
+      }]);
+
+      if (securityCheck.isVpn) {
+         await supabase.auth.signOut();
+         router.push('/Error/auth');
+         return;
       }
 
       const { data: profile, error: profileError } = await supabase

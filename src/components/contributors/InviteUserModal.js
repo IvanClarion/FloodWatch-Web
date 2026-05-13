@@ -57,6 +57,12 @@ export default function InviteUserModal({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Explicit validation
+    if (!lguName) {
+      setError("Please select a province.")
+      return
+    }
     if (!selectedRole) {
       setError("Please select an account role.")
       return
@@ -64,6 +70,7 @@ export default function InviteUserModal({ onClose }) {
 
     setLoading(true)
     setError(null)
+    setSuccess(false)
 
     try {
       // Check existing invitations
@@ -246,8 +253,8 @@ export default function InviteUserModal({ onClose }) {
                         </>
                     )}
                     
-                    {/* Hidden input for HTML5 required validation */}
-                    <input type="text" name="lguName" value={lguName} required readOnly className="sr-only" />
+                    {/* Hidden input for form values */}
+                    <input type="hidden" name="lguName" value={lguName} />
                 </div>
 
                 {/* Role Picker */}
@@ -293,7 +300,7 @@ export default function InviteUserModal({ onClose }) {
                         })}
                     </div>
                     {/* Hidden input for form validation */}
-                    <input type="hidden" name="role" value={selectedRole} required />
+                    <input type="hidden" name="role" value={selectedRole} />
                 </div>
 
                 {/* Submit */}
