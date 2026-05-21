@@ -334,3 +334,12 @@ html {
 @utility info-card{
   @apply bg-white border border-gray-200/60 shadow-sm rounded-xl p-5 flex flex-col gap-5;
 }
+@utility notif-banner{
+  @apply size-2 top-0 right-8 top-1 bg-red-500 rounded-full absolute;
+}
+@utility danger-button{
+  @apply w-full p-2 rounded-lg bg-red-500/20 border border-red-500 text-red-500 font-semibold;
+}
+@utility success-button{
+  @apply w-full p-2 rounded-lg bg-green-500 border-0  text-white font-semibold;
+}

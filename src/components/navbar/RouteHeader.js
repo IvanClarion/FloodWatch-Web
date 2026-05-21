@@ -25,6 +25,8 @@ export default function RouteHeader() {
         return "Area Seeding";
       case "account":
         return "Account";
+      case "id_verification":
+        return "Verification";
       default:
         // Fallback: capitalize the current route
         return currentRoute.charAt(0).toUpperCase() + currentRoute.slice(1);
