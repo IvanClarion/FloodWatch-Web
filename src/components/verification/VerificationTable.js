@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import CardSubHeader from "../cards/CardSubHeader"
 import ToogleButton from "../button/ToogleButton"
 import ToogleButtonLayout from "../button/ToogleButtonLayout"
@@ -16,55 +16,56 @@ import TableBadge from "../table/TableBadge"
 import TableDataAction from "../table/TableDataAction"
 import { Eye, ChevronRight } from "lucide-react"
 import VerificationTableModal from "./VerificationTableModal"
+import SingleLineSkeleton from "@/components/skeleton/SingleLineSkeleton"
+import { supabase } from "@/supabase/util/supabase"
 
-const MOCK_DATA = [
-  {
-    id_verification_id: "a1b2c3d4-1234-5678-9012-345678901234",
-    user_id: "u9876543-abcd-efgh-ijkl-mnopqrstuvwx",
-    user_name: "Juan Dela Cruz",
-    id_type: "Driver's License",
-    id_image_url: "https://example.com/id/juan.jpg",
-    status: "Pending",
-    reviewed_by: null,
-    submitted_at: "2024-05-20T10:30:00Z",
-    is_read: false,
-    ai_insight: "Text matches typical driver's license format.",
-    ai_confidence_score: 0.95,
-    ai_is_valid: true
-  },
-  {
-    id_verification_id: "e5f6g7h8-1234-5678-9012-345678901234",
-    user_id: "u1234567-abcd-efgh-ijkl-mnopqrstuvwx",
-    user_name: "Maria Clara",
-    id_type: "Passport",
-    id_image_url: "https://example.com/id/maria.jpg",
-    status: "Verified",
-    reviewed_by: "admin-1234-uuid",
-    submitted_at: "2024-05-19T14:15:00Z",
-    is_read: true,
-    ai_insight: "High confidence in MRZ lines.",
-    ai_confidence_score: 0.98,
-    ai_is_valid: true
-  },
-  {
-    id_verification_id: "i9j0k1l2-1234-5678-9012-345678901234",
-    user_id: "u3456789-abcd-efgh-ijkl-mnopqrstuvwx",
-    user_name: "Andres Bonifacio",
-    id_type: "National ID",
-    id_image_url: "https://example.com/id/andres.jpg",
-    status: "Unverified",
-    reviewed_by: "admin-1234-uuid",
-    submitted_at: "2024-05-18T09:00:00Z",
-    is_read: true,
-    ai_insight: "Blurry image detected, text unreadable.",
-    ai_confidence_score: 0.45,
-    ai_is_valid: false
-  }
-]
+const TABS = ["All", "Pending", "Approved", "Rejected", "Unverified"]
 
 export default function VerificationTable() {
   const [selectedRow, setSelectedRow] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [verifications, setVerifications] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("All")
+
+  const fetchVerifications = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true)
+
+    const { data, error } = await supabase
+      .from("id_verification")
+      .select('*')
+      .order("submitted_at", { ascending: false })
+
+    if (data) {
+      setVerifications(data)
+    } else if (error) {
+      console.error("Error fetching verifications:", error)
+    }
+
+    if (showLoading) setIsLoading(false)
+  }
+
+  useEffect(() => {
+    fetchVerifications()
+
+    // Real-time subscription
+    const channel = supabase
+      .channel('id_verification_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'id_verification' }, (payload) => {
+        // Fetch fresh data when changes occur in the table
+        fetchVerifications(false)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  const filtered = useMemo(() => {
+    if (activeTab === "All") return verifications
+    return verifications.filter((row) => row.status.toLowerCase() === activeTab.toLowerCase())
+  }, [activeTab, verifications])
 
   const handleOpenModal = (row) => {
     setSelectedRow(row)
@@ -77,14 +78,15 @@ export default function VerificationTable() {
   }
 
   const getStatusBadge = (status) => {
-    switch (status.toLowerCase()) {
+    const formattedStatus = status ? status.charAt(0).toUpperCase() + status.slice(1) : ''
+    switch (status?.toLowerCase()) {
       case 'verified':
       case 'approved':
-        return <TableBadge className="bg-green-500/10 text-green-500">{status}</TableBadge>
+        return <TableBadge className="bg-green-500/10 text-green-500">{formattedStatus}</TableBadge>
       case 'pending':
-        return <TableBadge className="bg-amber-500/10 text-amber-500">{status}</TableBadge>
+        return <TableBadge className="bg-amber-500/10 text-amber-500">{formattedStatus}</TableBadge>
       default:
-        return <TableBadge className="bg-red-500/10 text-red-500">{status}</TableBadge>
+        return <TableBadge className="bg-red-500/10 text-red-500">{formattedStatus}</TableBadge>
     }
   }
 
@@ -95,10 +97,15 @@ export default function VerificationTable() {
           <CardSubHeader className="!mb-0 leading-none self-center">ID Verifications</CardSubHeader>
         </div>
         <ToogleButtonLayout className="w-full sm:w-auto overflow-x-auto">
-          <ToogleButton active>All</ToogleButton>
-          <ToogleButton>Pending</ToogleButton>
-          <ToogleButton>Verified</ToogleButton>
-          <ToogleButton>Unverified</ToogleButton>
+          {TABS.map((tab) => (
+            <ToogleButton
+              key={tab}
+              active={activeTab === tab}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </ToogleButton>
+          ))}
         </ToogleButtonLayout>
       </TableHeader>
 
@@ -106,7 +113,8 @@ export default function VerificationTable() {
         <DataTable>
           <TableHead>
             <TableRow>
-              <Th>User Name</Th>
+              {/* CHANGED: Header is now User ID instead of Name */}
+              <Th>User ID</Th>
               <Th>ID Type</Th>
               <Th>Submitted At</Th>
               <Th>Status</Th>
@@ -114,23 +122,44 @@ export default function VerificationTable() {
             </TableRow>
           </TableHead>
           <tbody>
-            {MOCK_DATA.map((row) => (
-              <TableRow key={row.id_verification_id}>
-                <TableData className="font-medium text-gray-800">{row.user_name}</TableData>
-                <TableDataMuted>{row.id_type}</TableDataMuted>
-                <TableDataMuted>{new Date(row.submitted_at).toLocaleString()}</TableDataMuted>
-                <TableData>{getStatusBadge(row.status)}</TableData>
-                <TableDataAction>
-                  <button 
-                    onClick={() => handleOpenModal(row)}
-                    className="table-action-btn"
-                    title="View Details"
-                  >
-                    <ChevronRight className="size-4" />
-                  </button>
-                </TableDataAction>
-              </TableRow>
-            ))}
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={`skeleton-${i}`}>
+                  <TableData><SingleLineSkeleton /></TableData>
+                  <TableData><SingleLineSkeleton /></TableData>
+                  <TableData><SingleLineSkeleton /></TableData>
+                  <TableData><SingleLineSkeleton /></TableData>
+                  <TableDataAction><div style={{ width: "32px", height: "32px" }} /></TableDataAction>
+                </TableRow>
+              ))
+            ) : filtered.length > 0 ? (
+              filtered.map((row) => (
+                <TableRow key={row.id_verification_id}>
+                  {/* CHANGED: Displaying a shortened user_id since full_name is unavailable */}
+                  <TableData className="font-medium text-gray-800" title={row.user_id}>
+                    {row.user_id ? `${row.user_id.substring(0, 8)}...` : "Unknown"}
+                  </TableData>
+                  <TableDataMuted>{row.id_type}</TableDataMuted>
+                  <TableDataMuted>{new Date(row.submitted_at).toLocaleString()}</TableDataMuted>
+                  <TableData>{getStatusBadge(row.status)}</TableData>
+                  <TableDataAction>
+                    <button 
+                      onClick={() => handleOpenModal(row)}
+                      className="table-action-btn"
+                      title="View Details"
+                    >
+                      <ChevronRight className="size-4" />
+                    </button>
+                  </TableDataAction>
+                </TableRow>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="text-center text-gray-400 text-sm py-10">
+                  No verifications found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </DataTable>
       </TableScrollWrapper>
@@ -140,7 +169,8 @@ export default function VerificationTable() {
           <div className="fixed inset-0 z-40 bg-transparent" onClick={handleCloseModal}></div>
           <VerificationTableModal 
             data={selectedRow} 
-            onClose={handleCloseModal} 
+            onClose={handleCloseModal}
+            onStatusUpdate={() => fetchVerifications(false)} 
           />
         </>
       )}
