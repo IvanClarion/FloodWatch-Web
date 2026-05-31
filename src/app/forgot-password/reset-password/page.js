@@ -29,10 +29,11 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
+      const isAllowed = sessionStorage.getItem('allowPasswordReset')
       
-      if (!session) {
-        // No active session — user hasn't verified OTP
-        router.push('/forgot-password/verification')
+      if (!session || !isAllowed) {
+        // No active session or bypassed OTP — reject access
+        router.push('/Error/auth')
         return
       }
       
@@ -65,6 +66,7 @@ export default function ResetPasswordPage() {
       setMessage({ type: "error", text: error.message })
     } else {
       // Sign out the recovery session so they log in fresh
+      sessionStorage.removeItem('allowPasswordReset')
       await supabase.auth.signOut()
       setSuccess(true)
     }

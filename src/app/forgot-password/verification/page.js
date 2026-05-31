@@ -96,6 +96,7 @@ export default function VerificationPage() {
       setMessage({ type: "error", text: "Invalid or expired code." })
     } else {
       // OTP verified — user is now authenticated with a recovery session.
+      sessionStorage.setItem('allowPasswordReset', 'true')
       // Redirect to the reset-password page where they can set a new password.
       router.push('/forgot-password/reset-password')
       return

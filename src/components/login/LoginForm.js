@@ -11,7 +11,7 @@ import PrimaryButton from "../button/PrimaryButton"
 import ToogleButtonLayout from "../button/ToogleButtonLayout"
 import ToogleButton from "../button/ToogleButton"
 import { checkIpSecurity } from "@/vpnio/Detector"
-
+import Link from "next/link";
 export default function LoginForm() {
   const [activeAdmin, setActiveAdmin] = useState('national');
   const [email, setEmail] = useState('');
@@ -178,7 +178,7 @@ export default function LoginForm() {
                 <div className="flex flex-col gap-1">
                 <span className="flex justify-between items-center">
                 <CardBasedText className="text-sm font-semibold">Password:</CardBasedText>
-                <CardBasedText className='text-primary font-semibold hover:underline duration-300 cursor-pointer'>Forgot Password?</CardBasedText>
+                <Link href='/forgot-password/verification' className='text-primary text-xs font-semibold hover:underline duration-300 cursor-pointer'>Forgot Password?</Link>
                 </span>
                 
                 <GeneralInput 
