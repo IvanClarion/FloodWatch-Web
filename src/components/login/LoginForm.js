@@ -50,13 +50,8 @@ export default function LoginForm() {
       
       const ua = navigator.userAgent;
       let os = "Unknown OS";
-      if (ua.includes("Win")) {
-        if (ua.includes("Windows NT 10.0")) os = "Windows 10";
-        else if (ua.includes("Windows NT 6.3")) os = "Windows 8.1";
-        else if (ua.includes("Windows NT 6.2")) os = "Windows 8";
-        else if (ua.includes("Windows NT 6.1")) os = "Windows 7";
-        else os = "Windows";
-      } else if (ua.includes("Mac")) os = "MacOS";
+      if (ua.includes("Win")) os = "Windows";
+      else if (ua.includes("Mac")) os = "MacOS";
       else if (ua.includes("Android")) os = "Android";
       else if (ua.includes("like Mac")) os = "iOS";
       else if (ua.includes("Linux")) os = "Linux";
@@ -77,6 +72,21 @@ export default function LoginForm() {
       if (securityCheck.isVpn) {
          status = 'blocked';
          blockReason = 'VPN/Proxy/Tor Detected';
+      }
+
+      if (securityCheck.isVpn) {
+         const { error: notifError } = await supabase.from('notifications').insert([
+           {
+             user_id: data.user.id,
+             title: 'User Blocked',
+             message: `${email} is blocked due to VPN/Proxy usage.`,
+             type: 'VPN Detected',
+             target_role: 'national_admin',
+             is_read: false
+           }
+         ]);
+         
+         if (notifError) console.error("Notification insert error:", notifError);
       }
 
       await supabase.from('login_logs').insert([{

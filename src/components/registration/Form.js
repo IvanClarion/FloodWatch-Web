@@ -90,6 +90,18 @@ export default function Form({ invitation }) {
         }
       }
 
+      // 4. Send notification to national_admin
+      const { error: notifError } = await supabase.from('notifications').insert([{
+        user_id: userId,
+        title: 'New User Registered',
+        message: `${fullName} (${email}) has registered for the role of ${roleName}.`,
+        type: 'Registration',
+        target_role: 'national_admin',
+        is_read: false
+      }]);
+      
+      if (notifError) console.error("Registration notification error:", notifError);
+
       setSuccess(true)
 
       // Redirect to login after a short delay
