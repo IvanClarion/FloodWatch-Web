@@ -34,6 +34,7 @@ export default function VerificationTable() {
     const { data, error } = await supabase
       .from("id_verification")
       .select('*')
+      .order("is_read", { ascending: true })
       .order("submitted_at", { ascending: false })
 
     if (data) {
@@ -67,9 +68,24 @@ export default function VerificationTable() {
     return verifications.filter((row) => row.status.toLowerCase() === activeTab.toLowerCase())
   }, [activeTab, verifications])
 
-  const handleOpenModal = (row) => {
+  const handleOpenModal = async (row) => {
     setSelectedRow(row)
     setIsModalOpen(true)
+
+    // Automatically mark as read if it is unread
+    if (!row.is_read) {
+      const { error } = await supabase
+        .from('id_verification')
+        .update({ is_read: true })
+        .eq('id_verification_id', row.id_verification_id)
+        
+      if (!error) {
+        // Fetch to update the table immediately and re-sort
+        fetchVerifications(false)
+      } else {
+        console.error("Error marking as read:", error)
+      }
+    }
   }
 
   const handleCloseModal = () => {

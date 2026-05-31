@@ -337,6 +337,9 @@ html {
 @utility notif-banner{
   @apply size-2 top-0 right-8 top-1 bg-red-500 rounded-full absolute;
 }
+@utility notif-banner2{
+  @apply size-2 bg-red-500 rounded-full;
+}
 @utility danger-button{
   @apply w-full p-2 rounded-lg bg-red-500/20 border border-red-500 text-red-500 font-semibold;
 }

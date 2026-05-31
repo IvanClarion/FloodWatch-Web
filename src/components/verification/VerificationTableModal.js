@@ -110,19 +110,7 @@ export default function VerificationTableModal({ data, onClose, onStatusUpdate }
     }
   }
 
-  const handleMarkAsRead = async () => {
-    if (data.is_read) return
-
-    await supabase
-      .from('id_verification')
-      .update({ is_read: true })
-      .eq('id_verification_id', data.id_verification_id)
-  }
-
-  // Mark as read when modal opens
-  if (!data.is_read) {
-    handleMarkAsRead()
-  }
+  // Read status is now updated when the action button in the table is clicked
 
   return (
     <SideModal className="z-50">

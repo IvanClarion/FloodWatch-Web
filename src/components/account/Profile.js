@@ -2,11 +2,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/util/supabase";
-import { Camera, User, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Camera, User, Pencil, Loader2 } from "lucide-react";
 import GeneralCard from "../cards/GeneralCard";
 import CardSubHeader from "../cards/CardSubHeader";
 import PrimaryButton from "../button/PrimaryButton";
-
+import SignOutBtn from "../button/SignOutBtn";
 export default function Profile() {
   const router = useRouter();
   const fileInputRef = useRef(null);
@@ -153,6 +153,11 @@ export default function Profile() {
                 <Pencil className="w-4 h-4" />
                 Edit Profile
               </PrimaryButton>
+            </div>
+            <div className="w-full flex justify-center text-center items-center">
+              <div className="text-xs text-red-500 font-semibold">
+              <SignOutBtn />
+              </div>
             </div>
         </GeneralCard>
     </section>
