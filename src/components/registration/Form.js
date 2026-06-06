@@ -62,46 +62,23 @@ export default function Form({ invitation }) {
       const userId = authData.user?.id
       if (!userId) throw new Error("Failed to create user account.")
 
-      // 2. Insert profile into profiles table
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .upsert({
-          id: userId,
-          full_name: fullName,
-          email: email,
-          mobile_number: phoneNumber,
-          mobile_number_secondary: secondaryPhone || null,
-          organization_name: organizationName || null,
-          role: role,
-          is_verified: false,
-        })
-
-      if (profileError) throw profileError
-
-      // 3. Update invitation status to 'accepted'
-      if (invitation?.id) {
-        const { error: inviteError } = await supabase
-          .from("invitations")
-          .update({ status: "accepted" })
-          .eq("id", invitation.id)
-
-        if (inviteError) {
-          console.error("Failed to update invitation status:", inviteError)
-        }
-      }
-
-      // 4. Send notification to national_admin
-      const { error: notifError } = await supabase.from('notifications').insert([{
-        user_id: userId,
-        title: 'New User Registered',
-        message: `${fullName} (${email}) has registered for the role of ${roleName}.`,
-        type: 'Registration',
-        target_role: 'national_admin',
-        is_read: false
-      }]);
+      // 2. Call server action to insert profile and handle notifications (bypassing RLS)
+      const { createProfileAfterSignUp } = await import("@/app/actions/auth")
       
-      if (notifError) console.error("Registration notification error:", notifError);
+      const result = await createProfileAfterSignUp({
+        id: userId,
+        full_name: fullName,
+        email: email,
+        mobile_number: phoneNumber,
+        mobile_number_secondary: secondaryPhone || null,
+        organization_name: organizationName || null,
+        role: role,
+        is_verified: false,
+      }, invitation?.id)
 
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create user profile.")
+      }
       setSuccess(true)
 
       // Redirect to login after a short delay

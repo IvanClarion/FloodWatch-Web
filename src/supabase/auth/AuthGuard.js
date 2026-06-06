@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/util/supabase";
 import { checkIpSecurity } from "@/vpnio/Detector";
-
+import BoatLoader from "@/components/loader/BoatLoader";
+import WaveLoader from "@/components/loader/WaveLoader";
 export default function AuthGuard({ children, allowedRole }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -104,7 +105,7 @@ export default function AuthGuard({ children, allowedRole }) {
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <WaveLoader />
       </div>
     );
   }

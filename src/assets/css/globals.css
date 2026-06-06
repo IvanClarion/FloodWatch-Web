@@ -346,3 +346,45 @@ html {
 @utility success-button{
   @apply w-full p-2 rounded-lg bg-green-500 border-0  text-white font-semibold;
 }
+@keyframes colorPulse {
+  0%, 100% {
+    color: #9ca3af;
+  }
+  50% {
+    color: var(--color-primary);
+  }
+}
+
+@utility animate-boat-pulse {
+  animation: colorPulse 0.5s ease-in-out infinite;
+}
+@keyframes waveRun {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.wave-loader-anim {
+  animation: waveRun 1s linear infinite;
+}
+@utility lantaw-chat-header{
+  @apply flex justify-between items-center p-4;
+}
+
+/* Lantaw AI Markdown Prose Styles */
+.lantaw-prose h1 { font-size: 1.25rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; color: #1e293b; }
+.lantaw-prose h2 { font-size: 1.1rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; color: #1e293b; }
+.lantaw-prose h3 { font-size: 1rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; color: #334155; }
+.lantaw-prose p { margin-bottom: 0.5rem; line-height: 1.6; }
+.lantaw-prose strong { font-weight: 600; color: #0f172a; }
+.lantaw-prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.lantaw-prose ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.lantaw-prose li { margin-bottom: 0.2rem; }
+.lantaw-prose code { background-color: #f1f5f9; padding: 0.15rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; color: #be185d; }
+.lantaw-prose pre { background-color: #1e293b; color: #e2e8f0; padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem; font-size: 0.8rem; }
+.lantaw-prose pre code { background-color: transparent; color: inherit; padding: 0; }
+.lantaw-prose blockquote { border-left: 3px solid #94a3b8; padding-left: 0.75rem; margin: 0.5rem 0; color: #475569; font-style: italic; }
+.lantaw-prose hr { border: none; border-top: 1px solid #e2e8f0; margin: 0.75rem 0; }

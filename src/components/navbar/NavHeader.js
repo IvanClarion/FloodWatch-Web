@@ -5,9 +5,12 @@ import RouteHeader from "./RouteHeader"
 import CardBasedText from "../cards/CardBasedText"
 import {User,Bell, IdCard} from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { supabase } from "@/supabase/util/supabase"
 
 export default function NavHeader() {
+  const pathname = usePathname()
+  const basePath = pathname?.startsWith('/provincial-admin') ? '/provincial-admin' : '/national-admin'
   const [hasUnread, setHasUnread] = useState(false)
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false)
 
@@ -68,21 +71,21 @@ export default function NavHeader() {
     <section className="flex w-full justify-between items-center gap-2 sticky top-2 z-20">
        <RouteHeader/>
         <div className="flex items-stretch gap-2">
-           <Link href="/national-admin/id_verification" className="navheader-button relative">
+           <Link href={`${basePath}/id_verification`} className="navheader-button relative">
                 <div className="text-xs">
                   {hasUnread && <span className="notif-banner"/>}
                   <IdCard/>
                 </div>
             </Link>
             <div className="navheader-button lg:hidden">
-                <Link href='/national-admin/account'>
+                <Link href={`${basePath}/account`}>
                     <div className="text-xs">
                         <User/> 
                     </div>
                 </Link>  
             </div>
            
-            <Link href="/national-admin/notification" className="navheader-button relative">
+            <Link href={`${basePath}/notification`} className="navheader-button relative">
                 <div className="text-xs">
                 <Bell className=""/> 
                 {hasUnreadNotifs && <span className="notif-banner"></span>}

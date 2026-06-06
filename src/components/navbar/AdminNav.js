@@ -1,14 +1,14 @@
 "use client"
 import VerticalLayout from "./VerticalLayout"
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/supabase/util/supabase"
-import { LayoutDashboard, FileText, LineChart, Users, Map, Activity } from "lucide-react"
-import DrawerCard from "../cards/DrawerCard"
 import AccountButton from "../button/AccountButton"
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import EmblemLogo from "@/assets/images/logofloodwatch.png"
+import NationalNav from "./NationalNav"
+import ProvincialNav from "./ProvincialNav"
+
 export default function AdminNav() {
   const pathname = usePathname()
   const router = useRouter()
@@ -59,13 +59,8 @@ export default function AdminNav() {
     }
   }
 
-  const navItems = [
-    { name: 'Dashboard', href: '/national-admin/dashboard', icon: LayoutDashboard },
-    { name: 'Logs', href: '/national-admin/Logs/api', basePath: '/national-admin/Logs', icon: Activity },
-    { name: 'Analytics', href: '/national-admin/analytics', icon: LineChart },
-    { name: 'Contributors', href: '/national-admin/contributor', icon: Users },
-    { name: 'Seeding', href: '/national-admin/seeding', icon: Map },
-  ]
+  const isNational = pathname?.startsWith('/national-admin')
+  const isProvincial = pathname?.startsWith('/provincial-admin')
 
   return (
     <VerticalLayout>
@@ -73,34 +68,16 @@ export default function AdminNav() {
         {/* Desktop Header */}
         <section className="hidden gap-2 md:flex items-start justify-start p-6 border-b border-gray-100">
           <Image src={EmblemLogo} alt="Emblem Logo"/>
-          <h1 className="text-xl flex flex-col font-bold"><span className="text-primary">National</span><span className="text-secondary">Admin</span></h1>
+          <h1 className="text-xl flex flex-col font-bold">
+            <span className="text-primary">{isProvincial ? "Provincial" : "National"}</span>
+            <span className="text-secondary">Admin</span>
+          </h1>
         </section>
 
         {/* Navigation Links */}
         <nav className="flex-1 w-full flex items-center md:items-start no-scrollbar">
-
-          <ul className="vertical-nav">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const matchPath = item.basePath || item.href
-              // Active if pathname matches exactly or if we are in a subpath of it
-              const isActive = pathname === item.href || (pathname?.startsWith(matchPath) && matchPath !== '/national-admin')
-              
-              return (
-                <li key={item.name} className="flex-1 md:flex-none">
-                  <Link 
-                    href={item.href}
-                    className={`vertical-nav-link ${isActive ? 'vertical-nav-link-active' : 'vertical-nav-link-inactive'}`}
-                  >
-                    <Icon className="w-5 h-5 md:w-5 md:h-5" />
-                    <span className="text-[10px] md:text-sm font-semibold">
-                      {item.name}
-                    </span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+          {isNational && <NationalNav />}
+          {isProvincial && <ProvincialNav />}
         </nav>
 
         {/* Desktop Footer (Account) */}
