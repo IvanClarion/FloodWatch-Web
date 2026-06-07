@@ -53,6 +53,64 @@ function getChartInstructions() {
     )
 }
 
+// --- LantawDocumentFile: Document generation instructions ---
+function getDocumentInstructions() {
+    return (
+        "\n\n--- DOCUMENT GENERATION INSTRUCTIONS ---\n" +
+        "CRITICAL: You must NEVER proactively generate a document or downloadable file on your own. " +
+        "You are ONLY allowed to return the document JSON format if the user's query EXPLICITLY mentions " +
+        "keywords such as: 'generate a file', 'download', 'export', 'create a document', 'create a PDF', " +
+        "'create a DOCX', 'make me a report file', 'downloadable', or similar clear file-generation intent.\n\n" +
+        "If the user simply asks a question, requests information, or says 'give me a report' without " +
+        "mentioning a file or download, respond with a normal markdown answer instead. " +
+        "Do NOT assume the user wants a file. Only generate the document JSON when file intent is unmistakable.\n\n" +
+        "When the user DOES explicitly request a downloadable file, you must return a RAW JSON configuration block AT the VERY TOP of your response, followed by the raw markdown content below it.\n\n" +
+        "You are RESTRICTED to ONLY these file formats: 'docx' or 'pdf'.\n\n" +
+        "1. Start your response with exactly this JSON block:\n" +
+        '```json\n{ "document": true, "format": "<docx|pdf>", "title": "<Document Title>" }\n```\n\n' +
+        "2. Directly below the JSON block, write the full markdown content of the document.\n\n" +
+        "RULES:\n" +
+        "- 'format' MUST be either 'docx' or 'pdf'. Default to 'pdf' if the user doesn't specify.\n" +
+        "- NO MARKDOWN TABLES: The document generator does NOT support Markdown tables (e.g. `| Col | Col |`). You must NEVER use tables.\n" +
+        "- Instead of tables, use structured, nested bullet points to present data (e.g. `* Station A:\\n  - Temp: 32C\\n  - Wind: 2m/s`).\n" +
+        "- The markdown content below the JSON block should be well-structured with headings, bullet points, and paragraphs.\n" +
+        "- Include a proper title, date, and sections appropriate for the document type.\n" +
+        "- Do NOT include any conversational text, just the JSON block and the document markdown.\n"
+    )
+}
+
+// --- LantawSheet: Spreadsheet generation instructions ---
+function getSheetInstructions() {
+    return (
+        "\n\n--- SPREADSHEET GENERATION INSTRUCTIONS ---\n" +
+        "CRITICAL: You must NEVER proactively generate a spreadsheet on your own. " +
+        "You are ONLY allowed to return the spreadsheet JSON format if the user's query EXPLICITLY mentions " +
+        "keywords such as: 'spreadsheet', 'excel', 'xlsx', 'export to sheet', 'download sheet', " +
+        "'generate spreadsheet', or similar clear spreadsheet intent.\n\n" +
+        "If the user simply asks a question or wants information, respond normally.\n\n" +
+        "When the user DOES explicitly request a spreadsheet, return a RAW JSON object (no markdown code blocks).\n\n" +
+        "The JSON must strictly follow this structure:\n" +
+        '{ "spreadsheet": true, "source": "<source_table>", "title": "<Sheet Title>" }\n\n' +
+        "RULES:\n" +
+        "- 'source' MUST be one of these exact table names: 'pdrrmo_inventory', 'weather_telemetry', 'incident_report', 'air_quality', 'distress_signals', 'utilities'\n" +
+        "- The data will be pulled DIRECTLY from the database. You do NOT generate or invent any rows.\n" +
+        "- Choose the source table that best matches what the user is asking for.\n" +
+        "- If the user asks for multiple sources, pick the single most relevant one.\n" +
+        "- Do NOT include any conversational text outside the JSON object.\n"
+    )
+}
+
+// --- LantawFileStructurePlan: File content security and structure ---
+function getFileContentGuardrails() {
+    return (
+        "\n\n--- FILE CONTENT & SECURITY GUARDRAILS ---\n" +
+        "If you are generating a document or a spreadsheet, you MUST adhere to the following rules regarding its content:\n" +
+        "1. CONCISENESS: The content must be highly concise, professional, and straight to the point. Avoid fluff, long-winded introductions, or unnecessary conversational filler.\n" +
+        "2. NO SENSITIVE DATA OR RAW IDs: You must STRICTLY EXCLUDE any Personally Identifiable Information (PII) or sensitive data. Additionally, NEVER output raw database IDs, system UUIDs, or long alphanumeric hashes (e.g. 'cafaab15-5574...', '085d2ff5...'). Replace them with generic sequential names (e.g., 'Station 1', 'Location A') or omit the ID completely and just use the known place name.\n" +
+        "3. STRUCTURAL CLARITY: Ensure the data is logically organized. If it's a document, use clear headings and bullet points. If it's a spreadsheet, ensure the chosen source table accurately represents the user's request without exposing protected columns.\n"
+    )
+}
+
 // --- LantawSources: Fetch all context data ---
 async function getAllContextData() {
     const results = {}
@@ -128,6 +186,9 @@ export async function POST(request) {
             `\n--- CONTEXT DATA ---\n${contextString}`,
             getFormattingRules(),
             getChartInstructions(),
+            getDocumentInstructions(),
+            getSheetInstructions(),
+            getFileContentGuardrails(),
             `\n--- USER QUERY ---\n${prompt.trim()}`
         ].join('\n')
 

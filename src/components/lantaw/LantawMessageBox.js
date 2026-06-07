@@ -5,20 +5,73 @@ import ReactMarkdown from "react-markdown"
 import useTypewriter from "./TypewriterText"
 import useOnScreen from "@/hooks/useOnScreen"
 import LantawVisualization from "./LantawVisualization"
+import LantawDocumentCard from "./LantawDocumentCard"
+import LantawSheetCard from "./LantawSheetCard"
 
 function LantawMessageBox({ children, isNew = false }) {
   const ref = useRef(null)
   const isVisible = useOnScreen(ref, { rootMargin: '200px' })
 
-  // Intercept and parse JSON visualization data
-  const visualData = useMemo(() => {
+  // Intercept and parse JSON data (visualization, document config, spreadsheet)
+  const parsedData = useMemo(() => {
     if (typeof children !== 'string') return null
     try {
-      // Sometimes AI wraps JSON in markdown blocks
-      const cleanStr = children.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1')
-      const parsed = JSON.parse(cleanStr.trim())
+      // First, check if there's a JSON block at the top (used for documents and charts)
+      const match = children.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+      let jsonStr = ""
+      let remainingText = children
+
+      if (match) {
+        jsonStr = match[1].trim()
+        remainingText = children.replace(match[0], '').trim()
+      } else {
+        // Fallback for when AI doesn't wrap with backticks
+        const startIdx = children.indexOf('{')
+        const endIdx = children.indexOf('}') // Look for first closing brace (metadata block is short)
+        if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
+          jsonStr = children.substring(startIdx, endIdx + 1)
+          remainingText = children.substring(endIdx + 1).trim()
+        }
+      }
+
+      if (!jsonStr) return null
+
+      // Fix common LLM JSON error: literal newlines/tabs inside strings
+      let isInsideString = false;
+      let isEscaped = false;
+      let sanitized = '';
+      for (let i = 0; i < jsonStr.length; i++) {
+        const char = jsonStr[i];
+        if (char === '"' && !isEscaped) {
+          isInsideString = !isInsideString;
+          sanitized += char;
+        } else if (char === '\\') {
+          isEscaped = !isEscaped;
+          sanitized += char;
+        } else {
+          isEscaped = false;
+          if (isInsideString) {
+            if (char === '\n') sanitized += '\\n';
+            else if (char === '\r') sanitized += '\\r';
+            else if (char === '\t') sanitized += '\\t';
+            else sanitized += char;
+          } else {
+            sanitized += char;
+          }
+        }
+      }
+
+      const parsed = JSON.parse(sanitized)
       if (parsed && parsed.visualization) {
-        return parsed
+        return { type: 'visualization', data: parsed }
+      }
+      if (parsed && parsed.document === true) {
+        // Attach the rest of the message as the markdown content for the document
+        parsed.content = remainingText
+        return { type: 'document', data: parsed }
+      }
+      if (parsed && parsed.spreadsheet === true) {
+        return { type: 'spreadsheet', data: parsed }
       }
     } catch (e) {
       return null
@@ -32,8 +85,12 @@ function LantawMessageBox({ children, isNew = false }) {
             <Origami className="size-4"/>
         </div>
         <div className="text-sm text-slate-700 leading-relaxed lantaw-prose w-full overflow-hidden">
-            {visualData ? (
-                <LantawVisualization data={visualData} />
+            {parsedData?.type === 'visualization' ? (
+                <LantawVisualization data={parsedData.data} />
+            ) : parsedData?.type === 'document' ? (
+                <LantawDocumentCard data={parsedData.data} />
+            ) : parsedData?.type === 'spreadsheet' ? (
+                <LantawSheetCard data={parsedData.data} />
             ) : isNew ? (
                 <TypewriterMarkdown text={children} />
             ) : isVisible ? (
