@@ -373,6 +373,12 @@ html {
 @utility lantaw-chat-header{
   @apply flex justify-between items-center p-4;
 }
+@utility tag-banner-danger{
+  @apply py-2 px-5 rounded-lg bg-red-500 text-white;
+}
+@utility tag-banner-default{
+  @apply py-2 px-5 rounded-lg bg-primary text-white;
+}
 
 /* Lantaw AI Markdown Prose Styles */
 .lantaw-prose h1 { font-size: 1.25rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; color: #1e293b; }

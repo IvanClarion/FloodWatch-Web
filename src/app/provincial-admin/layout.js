@@ -9,12 +9,12 @@ export const metadata = {
 export default function ProvincialAdminLayout({ children }) {
   return (
     <AuthGuard allowedRole="provincial_admin">
-      <main className='flex w-full min-h-screen overflow-hidden'>
-        <div>
+      <main className='flex flex-col lg:flex-row w-full h-screen overflow-hidden'>
+        <div className="lg:w-64 flex-shrink-0">
             <AdminNav/>
         </div>
-        <section className="flex-1 w-full flex flex-col p-2 overflow-y-auto">
-            <div className="w-full mb-5">
+        <section className="flex-1 h-full w-full flex flex-col p-2 overflow-y-auto relative pb-24 lg:pb-2">
+            <div className="sticky top-0 z-10 w-full mb-5">
             <ProvincialHeader/>
             </div>
         {children}
