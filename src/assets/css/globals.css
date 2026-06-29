@@ -374,10 +374,16 @@ html {
   @apply flex justify-between items-center p-4;
 }
 @utility tag-banner-danger{
-  @apply py-2 px-5 rounded-lg bg-red-500 text-white;
+  @apply py-1 px-5 rounded-lg bg-red-500/95 text-white;
 }
 @utility tag-banner-default{
-  @apply py-2 px-5 rounded-lg bg-primary text-white;
+  @apply py-1 px-5 rounded-lg bg-primary/50 backdrop-blur-sm text-white font-semibold;
+}
+@utility tag-summary-default{
+  @apply py-1 px-2 rounded-full bg-primary/50 backdrop-blur-sm text-white font-semibold;
+}
+@utility tag-default{
+  @apply py-1 px-2 rounded-full bg-gray-100/80 backdrop-blur-sm text-black/80 font-semibold;
 }
 
 /* Lantaw AI Markdown Prose Styles */

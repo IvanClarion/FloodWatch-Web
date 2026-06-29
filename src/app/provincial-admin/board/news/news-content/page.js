@@ -1,8 +1,9 @@
-import TextArea from "@/components/forms/TextArea"
+import NewsAddContent from "@/components/board/news/NewsAddContent"
+
 export default function NewsContent() {
   return (
-    <div>
-      <TextArea className='w-full'/>
-    </div>
+    <section className="grid gap-10">
+     <NewsAddContent/>
+    </section>
   )
 }

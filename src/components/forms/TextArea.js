@@ -1,6 +1,9 @@
 import clsx from "clsx"
 export default function TextArea({ className, ...props }) {
   return (
-    <textarea className={clsx("border-none outline-0 resize-none p-2 bg-transparent", className)} {...props}/>
+    <textarea 
+      className={clsx("input-layout w-full outline-0 min-h-[120px] md:min-h-[150px] overflow-y-auto resize-none", className)} 
+      {...props}
+    />
   )
 }
