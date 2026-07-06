@@ -3,11 +3,17 @@ import { useState, useCallback } from "react"
 import { supabase } from "@/supabase/util/supabase"
 import ToolBar from "@/components/board/news/ToolBar"
 import NewsContentCard from "@/components/board/news/NewsContentCard"
+import WarningDeleteBanner from "@/components/board/announcement/WarningDeleteBanner"
+import NewsViewDeleteModal from "@/components/board/news/NewsViewDeleteModal"
 
 export default function Page() {
   const [selectedIds, setSelectedIds] = useState([])
   const [refreshToken, setRefreshToken] = useState(0)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [showWarning, setShowWarning] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteTargets, setDeleteTargets] = useState([])
 
   const toggleSelect = useCallback((id) => {
     setSelectedIds((prev) =>
@@ -38,14 +44,45 @@ export default function Page() {
       <ToolBar
         selectedCount={selectedIds.length}
         isDeleting={isDeleting}
-        onDeleteSelected={() => deleteIds(selectedIds)}
+        onDeleteSelected={() => {
+          if (selectedIds.length === 0) {
+            setShowWarning(true)
+          } else {
+            setDeleteTargets(selectedIds)
+            setShowDeleteModal(true)
+          }
+        }}
+        onSearch={setSearchTerm}
       />
       <NewsContentCard
         refreshToken={refreshToken}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
-        onDeleteOne={(id) => deleteIds([id])}
+        onDeleteOne={(id) => {
+          setDeleteTargets([id])
+          setShowDeleteModal(true)
+        }}
+        searchTerm={searchTerm}
       />
+
+      {showDeleteModal && (
+        <NewsViewDeleteModal
+          count={deleteTargets.length}
+          isDeleting={isDeleting}
+          onConfirm={async () => {
+            await deleteIds(deleteTargets)
+            setShowDeleteModal(false)
+          }}
+          onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
+
+      {showWarning && (
+        <WarningDeleteBanner 
+          message="Please select at least one news item to delete."
+          onClose={() => setShowWarning(false)}
+        />
+      )}
     </div>
   )
 }

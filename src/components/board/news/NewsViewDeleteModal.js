@@ -5,7 +5,12 @@ import CardBasedText from "@/components/cards/CardBasedText"
 import SecondaryButton from "@/components/button/SecondaryButton"
 import { Trash } from "lucide-react"
 
-export default function NewsViewDeleteModal({ onConfirm, onCancel, isDeleting = false }) {
+export default function NewsViewDeleteModal({ count = 1, onConfirm, onCancel, isDeleting = false }) {
+  const title = count > 1 ? `Delete ${count} News Items` : "Delete News"
+  const message = count > 1 
+    ? `Are you sure you want to delete ${count} selected news items? This action cannot be undone.`
+    : `Are you sure you want to delete this news? This action cannot be undone.`
+
   return (
     <FloatingModal>
       <GeneralCard className="w-full max-w-md grid gap-6 p-6 text-center">
@@ -13,9 +18,9 @@ export default function NewsViewDeleteModal({ onConfirm, onCancel, isDeleting = 
           <span className="inline-flex items-center justify-center size-12 rounded-full bg-red-500/10">
             <Trash className="size-6 text-red-500" />
           </span>
-          <CardHeader>Delete News</CardHeader>
+          <CardHeader>{title}</CardHeader>
           <CardBasedText className="text-gray-500">
-            Are you sure you want to delete this news? This action cannot be undone.
+            {message}
           </CardBasedText>
         </div>
         <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { Sparkles, Loader2 } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
 import TextArea from "@/components/forms/TextArea"
 import PrimaryButton from "@/components/button/PrimaryButton"
 
@@ -8,8 +9,6 @@ export default function NewsPromptAssist({ isOpen, onClose, onGenerate, onGenera
   const [narration, setNarration] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-
-  if (!isOpen) return null
 
   const handleGenerate = async () => {
     if (!narration.trim()) {
@@ -57,12 +56,20 @@ export default function NewsPromptAssist({ isOpen, onClose, onGenerate, onGenera
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 pointer-events-none">
-      <div 
-        className="bg-white/50 backdrop-blur-2xl border border-gray-200 w-full max-w-3xl rounded-3xl p-6 shadow-2xl relative transition-all pointer-events-auto"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 pointer-events-none"
+        >
+          <div 
+            className="bg-white/50 backdrop-blur-2xl border border-gray-200 w-full max-w-3xl rounded-3xl p-6 shadow-2xl relative transition-all pointer-events-auto"
+          >
 
-        {/* Content */}
+            {/* Content */}
         <fieldset className="grid gap-4">
           <p className="text-sm text-gray-600">
             Need help writing your news report? Just tell Lantaw what happened in a few words, and it will generate a professional, detailed report for you automatically.
@@ -104,6 +111,8 @@ export default function NewsPromptAssist({ isOpen, onClose, onGenerate, onGenera
           </PrimaryButton>
         </div>
       </div>
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

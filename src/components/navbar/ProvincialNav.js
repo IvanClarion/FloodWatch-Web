@@ -11,7 +11,7 @@ export default function ProvincialNav() {
     { name: 'Monitoring', href: '/provincial-admin/monitoring', icon: Radar },
     { name: 'Analytics', href: '/provincial-admin/analytics', icon: Activity },
     { name: 'Utilities', href: '/provincial-admin/utilities', icon: Archive },
-    { name: 'Board', href: '/provincial-admin/board/news', icon: Presentation },
+    { name: 'Board', href: '/provincial-admin/board/news', basePath: '/provincial-admin/board', icon: Presentation },
   ]
 
   return (

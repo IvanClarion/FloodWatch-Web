@@ -374,10 +374,10 @@ html {
   @apply flex justify-between items-center p-4;
 }
 @utility tag-banner-danger{
-  @apply py-1 px-5 rounded-lg bg-red-500/95 text-white;
+  @apply py-1 px-5 rounded-lg bg-red-500/10 text-red-700 font-semibold;
 }
 @utility tag-banner-default{
-  @apply py-1 px-5 rounded-lg bg-primary/50 backdrop-blur-sm text-white font-semibold;
+  @apply py-1 px-5 rounded-lg bg-primary/10 text-primary font-semibold;
 }
 @utility tag-summary-default{
   @apply py-1 px-2 rounded-full bg-primary/50 backdrop-blur-sm text-white font-semibold;

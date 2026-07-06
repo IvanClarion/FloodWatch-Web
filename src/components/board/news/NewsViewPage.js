@@ -100,11 +100,11 @@ export default function NewsViewPage({ id }) {
   return (
     <>
     <GeneralCard className='px-0 py-0 overflow-hidden relative grid gap-5'>
-        <div className="relative">
+        <div className="">
             <img src={news.cover_image || "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1000&auto=format&fit=crop"} alt="" className="w-full h-[500px] object-cover"/>
 
         </div>
-        <div className="p-5">
+        <div className="p-5 grid gap-5">
         <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
             <div className="summary-data-icon"><User/></div>
@@ -116,7 +116,7 @@ export default function NewsViewPage({ id }) {
 
         <div className="p-5">
             <CardHeader className="text-primary">{news.headline}</CardHeader>
-            <CardBasedText className="text-lg">{news.detailed_content}</CardBasedText>
+            <CardBasedText className="text-lg text-justify">{news.detailed_content}</CardBasedText>
         </div>
         <hr/>
         <div className="flex items-center gap-2 justify-between">
@@ -132,10 +132,10 @@ export default function NewsViewPage({ id }) {
             </div>
             )}
         </div>
-        <div className="absolute top-0 p-2 flex justify-between items-center w-full">
-            <SecondaryButton onClick={() => setShowDeleteModal(true)} className='px-2 py-1 text-red-500 font-semibold border-red-500 bg-red-500/5'>Delete <Trash className="text-red-500 size-5"/></SecondaryButton>
-            <div className="flex items-center gap-2 bg-white ">
-                <Eye/>
+        <div className="absolute top-0 right-0 left-0 p-2 flex justify-between items-center w-full">
+            <SecondaryButton onClick={() => setShowDeleteModal(true)} className='px-5 py-2 text-red-500 font-semibold border-none bg-white'>Delete <Trash className="text-red-500 size-4"/></SecondaryButton>
+            <div className="flex items-center text-gray-500 gap-2 p-2 bg-white  rounded-lg px-5">
+                <Eye className=""/>
                 <CardBasedText>{news.views ?? 0}</CardBasedText>
             </div>
         </div>
