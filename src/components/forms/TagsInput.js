@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { X } from "lucide-react"
 
-export default function TagsInput({ className, value, onChange, placeholder, ...props }) {
+export default function TagsInput({ className, value, onChange, placeholder, maxTags, disabled, ...props }) {
   const [inputValue, setInputValue] = useState("")
   
   // Ensure we always work with an array
@@ -13,6 +13,7 @@ export default function TagsInput({ className, value, onChange, placeholder, ...
       e.preventDefault()
       const newTag = inputValue.trim()
       if (newTag && !tags.includes(newTag)) {
+        if (maxTags !== undefined && tags.length >= maxTags) return
         onChange([...tags, newTag])
       }
       setInputValue("")
@@ -41,11 +42,12 @@ export default function TagsInput({ className, value, onChange, placeholder, ...
       ))}
       <input 
         {...props}
-        className="outline-0 bg-transparent text-sm border-0 flex-1 min-w-[80px]"
+        className="outline-0 bg-transparent text-sm border-0 flex-1 min-w-[80px] disabled:opacity-50"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={tags.length === 0 ? placeholder : ""}
+        disabled={disabled || (maxTags !== undefined && tags.length >= maxTags)}
       />
     </div>
   )

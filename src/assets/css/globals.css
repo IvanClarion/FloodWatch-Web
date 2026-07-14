@@ -25,11 +25,11 @@ html {
 
 
 @utility horizontal-layout-navbar {
-  @apply flex items-center w-full p-3 sticky justify-between top-2 z-50 transition-all duration-300;
+  @apply flex  items-center w-full p-3 sticky justify-between top-0 z-50 transition-all duration-300;
 }
 
 @utility navbar-stuck {
-  @apply bg-neutral-200/70 backdrop-blur-md shadow-sm border-white/20 rounded-2xl;
+  @apply bg-white/90 backdrop-blur-md shadow-sm border-white/20 rounded-b-4xl;
 }
 @utility mission-vision-layout{
   @apply grid gap-2 grid-cols-1 lg:grid-cols-2;
@@ -384,6 +384,9 @@ html {
 }
 @utility tag-default{
   @apply py-1 px-2 rounded-full bg-gray-100/80 backdrop-blur-sm text-black/80 font-semibold;
+}
+@utility profile-img{
+  @apply rounded-full aspect-square object-cover;
 }
 
 /* Lantaw AI Markdown Prose Styles */

@@ -12,7 +12,7 @@ export default function ProvincialHeader() {
             <Origami className="text-xs"/>
             <Sparkle className="size-4 absolute top-0 left-0 right-1 fill-primary/50"/>
         </Link>
-        <Link href='/provincial-admin/account' className="navheader-button">
+        <Link href='/provincial-admin/account' className="navheader-button block lg:hidden">
             <User className="text-xs"/>
         </Link>
         <Link href='/provincial-admin/notification' className="navheader-button">

@@ -14,7 +14,7 @@ export default function ProvincialAdminLayout({ children }) {
             <AdminNav/>
         </div>
         <section className="flex-1 h-full w-full flex flex-col p-2 overflow-y-auto relative pb-24 lg:pb-2">
-            <div className="sticky top-0 z-10 w-full mb-5">
+            <div className="sticky top-0 z-50 w-full mb-5">
             <ProvincialHeader/>
             </div>
         {children}

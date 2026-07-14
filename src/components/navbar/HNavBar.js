@@ -22,7 +22,7 @@ export default function HNavBar() {
 
     return (
         <nav className={`horizontal-layout-navbar ${isScrolled ? 'navbar-stuck' : 'bg-transparent'}`}> 
-            <label className="font-bold text-lg"><Link href="/">Floodwatch</Link></label>
+            <label className="font-bold text-lg text-primary"><Link href="/">Floodwatch</Link></label>
             
             {/* Desktop Links */}
             <ul className="hidden md:flex gap-10">
