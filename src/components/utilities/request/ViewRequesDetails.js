@@ -6,6 +6,8 @@ import CardBasedText from "@/components/cards/CardBasedText"
 import LogisticsLocationMap from "./components/LogisticsLocationMap"
 import RequestDetails from "./components/RequestDetails"
 import WorkFlowTool from "./components/WorkFlowTool"
+import LogisticsDetail from "./components/LogisticsDetail"
+import ApprovedandDispatchSideModal from "./components/ApprovedandDispatchSideModal"
 export default function ViewRequesDetails() {
   return (
     <GeneralCard className='grid gap-5'>
@@ -22,8 +24,12 @@ export default function ViewRequesDetails() {
             <RequestDetails/>
         </div>
         <div>
+            <LogisticsDetail/>
+        </div>
+        <div>
             <WorkFlowTool/>
         </div>
+        <ApprovedandDispatchSideModal/>
     </GeneralCard>
   )
 }

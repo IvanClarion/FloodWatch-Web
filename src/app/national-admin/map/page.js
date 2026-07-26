@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, Suspense, lazy } from "react";
-import MapToggleSwitch from "@/components/maps/MapToggleSwitch";
 import MapsDocumentation from "@/components/maps/MapsDocumentation";
 import MapSkeleton from "@/components/skeleton/MapSkeleton";
 
@@ -12,16 +11,18 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState('Risk Mapping');
 
   return (
-    <section className="grid relative gap-5 mt-2">
-      <div className="flex justify-between">
-        <MapToggleSwitch activeTab={activeTab} onTabChange={setActiveTab} />
+    <section className="grid relative gap-3 mt-2">
+      <div className="flex justify-end z-10">
         <MapsDocumentation />
       </div>
 
       <Suspense fallback={<MapSkeleton />}>
-        {activeTab === 'Risk Mapping' ? <Map /> : <WeatherMap />}
+        {activeTab === 'Risk Mapping' ? (
+          <Map activeTab={activeTab} onTabChange={setActiveTab} />
+        ) : (
+          <WeatherMap activeTab={activeTab} onTabChange={setActiveTab} />
+        )}
       </Suspense>
-
     </section>
-  )
+  );
 }

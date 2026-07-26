@@ -1,0 +1,308 @@
+"use client";
+
+import React, { useEffect, useState } from 'react';
+import Map, { Marker, NavigationControl } from 'react-map-gl/mapbox';
+import { X, Leaf, Microscope, Waves, Wind, Info, Clock } from 'lucide-react';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { supabase } from '@/supabase/util/supabase';
+import GeneralCard from '../cards/GeneralCard';
+import CardHeader from '../cards/CardHeader';
+import CardSubHeader from '../cards/CardSubHeader';
+import CardBasedText from '../cards/CardBasedText';
+
+// ─── AQI Thresholds & Helpers (Matching specific requirements) ──────────────────────────
+const AQI_LEGEND = [
+  { range: '0 - 25', label: 'Good', color: '#22c55e', pinClass: 'map-pin-icon-default-green', bg: 'bg-green-50', iconBg: 'summary-data-icon-green' },
+  { range: '25.1 - 35', label: 'Fair', color: '#eab308', pinClass: 'map-pin-icon-default-yellow', bg: 'bg-yellow-50', iconBg: 'summary-data-icon-yellow' },
+  { range: '35.1 - 45', label: 'Unhealthy for sensitive groups', color: '#f97316', pinClass: 'map-pin-icon-default-orange', bg: 'bg-orange-50', iconBg: 'summary-data-icon-orange' },
+  { range: '45.1 - 55', label: 'Very unhealthy', color: '#ef4444', pinClass: 'map-pin-icon-default-red', bg: 'bg-red-50', iconBg: 'summary-data-icon-red' },
+  { range: '55.1 - 90', label: 'Acutely unhealthy', color: '#a855f7', pinClass: 'map-pin-icon-default-purple', bg: 'bg-purple-50', iconBg: 'summary-data-icon-purple' },
+  { range: '91+', label: 'Emergency', color: '#800000', pinClass: 'map-pin-icon-default-maroon', bg: 'bg-rose-950/10', iconBg: 'summary-data-icon-red' },
+];
+
+const getAqiDetails = (aqi) => {
+  if (aqi == null || isNaN(aqi)) {
+    return { label: 'No Data', pinClass: 'map-pin-icon-default', color: '#3b82f6', bg: 'bg-blue-50', iconBg: 'summary-data-icon' };
+  }
+  if (aqi <= 25) return AQI_LEGEND[0];
+  if (aqi <= 35) return AQI_LEGEND[1];
+  if (aqi <= 45) return AQI_LEGEND[2];
+  if (aqi <= 55) return AQI_LEGEND[3];
+  if (aqi <= 90) return AQI_LEGEND[4];
+  return AQI_LEGEND[5];
+};
+
+// ─── Popup Row helper ────────────────────────────────────────────────────────
+const Row = ({ icon, label, value, unit = '' }) => (
+  <div className="flex items-center gap-2.5 my-1.5 py-1 border-b border-gray-100 last:border-0">
+    <span className="text-gray-500">{icon}</span>
+    <span className="text-gray-500 text-xs font-semibold flex-1">{label}</span>
+    <span className="font-bold text-sm text-gray-800">
+      {value != null && value !== '' ? `${value}${unit}` : '—'}
+    </span>
+  </div>
+);
+
+export default function AirQualityMap() {
+  const [airData, setAirData] = useState([]);
+  const [selectedMuni, setSelectedMuni] = useState(null);
+
+  useEffect(() => {
+    // 1. Robust dual-fetch from view and tables to guarantee zero silent failures
+    const fetchData = async () => {
+      const [viewRes, munisRes, airRes] = await Promise.all([
+        supabase.from('live_municipality_weather').select('*'),
+        supabase.from('municipality_or_city').select('*'),
+        supabase.from('air_quality').select('*').order('recorded_at', { ascending: false })
+      ]);
+
+      const viewData = viewRes.data || [];
+      const munisData = munisRes.data || [];
+      const airRecords = airRes.data || [];
+
+      // Use munisData as primary source; if empty due to RLS or permissions, fall back to viewData
+      const sourceData = munisData.length > 0 ? munisData : viewData;
+
+      const mergedData = sourceData.map((muni) => {
+        const id = muni.municipality_id || muni.id;
+        
+        // Match with latest air quality reading or fallback to view data
+        const latestAir = airRecords.find((a) => a.municipality_id === id) || 
+                          viewData.find((v) => (v.municipality_id || v.id) === id) || 
+                          {};
+
+        // Check every possible coordinate column name (center_latitude, latitude, etc.)
+        const latVal = muni.center_latitude ?? muni.latitude ?? latestAir.latitude ?? latestAir.center_latitude;
+        const lngVal = muni.center_longitude ?? muni.longitude ?? latestAir.longitude ?? latestAir.center_longitude;
+
+        const lat = parseFloat(latVal);
+        const lng = parseFloat(lngVal);
+
+        const aqi = latestAir.aqi ?? muni.aqi ?? null;
+        const pm2_5 = latestAir.pm2_5 ?? muni.pm2_5 ?? null;
+        const pm10 = latestAir.pm10 ?? muni.pm10 ?? null;
+        const status = latestAir.status ?? latestAir.air_quality_status ?? muni.air_quality_status ?? null;
+        const recorded_at = latestAir.recorded_at ?? latestAir.air_recorded_at ?? muni.air_recorded_at ?? null;
+
+        return {
+          ...muni,
+          municipality_id: id,
+          latitude: !isNaN(lat) && lat !== 0 ? lat : null,
+          longitude: !isNaN(lng) && lng !== 0 ? lng : null,
+          municipality_name: muni.name || muni.municipality_name || "Unknown Municipality",
+          aqi: aqi != null ? Number(aqi) : null,
+          pm2_5: pm2_5 != null ? Number(pm2_5) : null,
+          pm10: pm10 != null ? Number(pm10) : null,
+          air_quality_status: status,
+          air_recorded_at: recorded_at,
+        };
+      });
+
+      console.log("📍 [AirQualityMap Debug] Total merged items:", mergedData.length, "| Valid GPS items:", mergedData.filter(m => m.latitude != null && m.longitude != null).length, "| Raw Data samples:", { viewData: viewData.slice(0, 2), munisData: munisData.slice(0, 2), airRecords: airRecords.slice(0, 2) });
+
+      setAirData(mergedData);
+    };
+
+    fetchData();
+
+    // 2. Realtime: Subscribe to air_quality table inserts
+    const airChannel = supabase
+      .channel('realtime-air-quality-map')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'air_quality' },
+        (payload) => {
+          setAirData((cur) =>
+            cur.map((muni) =>
+              muni.municipality_id === payload.new.municipality_id
+                ? {
+                  ...muni,
+                  aqi: payload.new.aqi,
+                  pm2_5: payload.new.pm2_5,
+                  pm10: payload.new.pm10,
+                  air_quality_status: payload.new.status,
+                  air_recorded_at: payload.new.recorded_at,
+                }
+                : muni
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(airChannel);
+    };
+  }, []);
+
+  // Filter out municipalities without valid coordinates
+  const validMarkers = airData.filter(
+    (m) =>
+      m.latitude != null && m.longitude != null &&
+      isFinite(m.latitude) && isFinite(m.longitude)
+  );
+
+  const activeDetails = selectedMuni ? getAqiDetails(selectedMuni.aqi) : null;
+
+  return (
+    <div className="relative w-full h-[85vh] xl:h-screen min-h-[600px] rounded-2xl overflow-hidden shadow-sm border border-gray-200/80">
+
+      {/* ── Mapbox Canvas (Removed maxBounds restriction so coordinates anywhere appear) ── */}
+      <Map
+        initialViewState={{ latitude: 10.3157, longitude: 123.8854, zoom: 8.5 }}
+        mapStyle="mapbox://styles/apex-yoshi/cmp0s3wq700bg01sx2y9i69pw"
+        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <NavigationControl position="top-right" />
+
+        {/* ── Markers ── */}
+        {validMarkers.map((muni) => {
+          const details = getAqiDetails(muni.aqi);
+          return (
+            <Marker
+              key={muni.municipality_id || Math.random()}
+              longitude={muni.longitude}
+              latitude={muni.latitude}
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setSelectedMuni(muni);
+              }}
+            >
+              <div 
+                className={`cursor-pointer size-3 rounded-full transition-transform hover:scale-125 ${details.pinClass}`} 
+                style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  borderRadius: '50%', 
+                  backgroundColor: details.color,
+                  boxShadow: '0 0 0 2px white, 0 2px 4px rgba(0,0,0,0.3)'
+                }}
+                title={`${muni.municipality_name}: AQI ${muni.aqi ?? 'N/A'}`} 
+              />
+            </Marker>
+          );
+        })}
+      </Map>
+
+      {/* ── Floating Legend Card (Bottom-Right) ── */}
+      <div className="absolute bottom-4 right-4 z-10 hidden sm:block">
+        <div className="bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-lg border border-gray-200 max-w-[260px] transition-all">
+          <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-gray-100">
+            <span className="text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Info className="size-4 text-primary" /> AQI Index Legend
+            </span>
+          </div>
+          <div className="grid gap-2">
+            {AQI_LEGEND.map((item, index) => (
+              <div key={index} className="flex items-center justify-between text-xs font-semibold">
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <span 
+                    className="size-3 rounded-full shrink-0 shadow-xs" 
+                    style={{ backgroundColor: item.color }} 
+                  />
+                  <span className="text-gray-700 truncate max-w-[140px]" title={item.label}>
+                    {item.label}
+                  </span>
+                </div>
+                <span className="text-gray-400 font-mono text-[11px] shrink-0">
+                  {item.range}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Floating Detail Panel (Top-Left) ── */}
+      {selectedMuni && (
+        <div
+          className="absolute top-4 left-4 z-20 w-[280px] md:w-[320px] bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden transition-all animate-slide-left"
+        >
+          <GeneralCard className="p-0 border-none shadow-none">
+            
+            {/* Panel Header */}
+            <div className="p-4 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <CardHeader className="text-gray-800 capitalize text-lg font-extrabold">
+                  {selectedMuni.municipality_name}
+                </CardHeader>
+                <CardBasedText className="text-gray-400 text-xs">
+                  Municipality Air Monitor
+                </CardBasedText>
+              </div>
+              <button
+                onClick={() => setSelectedMuni(null)}
+                className="modal-icon-button bg-gray-200/60 hover:bg-gray-200"
+                aria-label="Close panel"
+              >
+                <X className="size-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Panel Body */}
+            <div className="p-4 grid gap-4 max-h-[75vh] overflow-y-auto">
+              
+              {/* AQI Primary Status Box */}
+              <div className={`p-4 rounded-xl flex flex-col gap-2 border ${activeDetails.bg} border-gray-200/50`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={activeDetails.iconBg}>
+                      <Leaf className="size-5" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                      Air Quality
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span className="text-3xl font-extrabold" style={{ color: activeDetails.color }}>
+                    {selectedMuni.aqi != null ? selectedMuni.aqi : '—'} 
+                    <span className="text-xs font-semibold text-gray-500 ml-1">AQI</span>
+                  </span>
+                  <span className="text-sm font-bold text-gray-800 text-right">
+                    {activeDetails.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detailed Metrics */}
+              <div>
+                <CardSubHeader className="text-gray-700 text-sm font-bold mb-2 flex items-center gap-1.5">
+                  <Wind className="size-4 text-primary" /> Pollutant Density
+                </CardSubHeader>
+                <div className="bg-gray-50/60 rounded-xl p-3 border border-gray-100">
+                  <Row 
+                    icon={<Microscope className="size-4 text-primary" />} 
+                    label="Particulate Matter (PM2.5)" 
+                    value={selectedMuni.pm2_5} 
+                    unit=" µg/m³" 
+                  />
+                  <Row 
+                    icon={<Waves className="size-4 text-primary" />} 
+                    label="Coarse Particles (PM10)" 
+                    value={selectedMuni.pm10} 
+                    unit=" µg/m³" 
+                  />
+                </div>
+              </div>
+
+              {/* Timestamp Indicator */}
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-gray-400 text-[11px] font-medium">
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3.5" /> Recorded At
+                </span>
+                <span>
+                  {selectedMuni.air_recorded_at 
+                    ? new Date(selectedMuni.air_recorded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : 'Recent'}
+                </span>
+              </div>
+
+            </div>
+          </GeneralCard>
+        </div>
+      )}
+    </div>
+  );
+}

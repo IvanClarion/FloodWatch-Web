@@ -8,6 +8,7 @@ html {
   --color-accent: #BFE8FF;
   --color-primary: #0035A9;
   --color-secondary: #E56C27;
+  --color-maroon: #800000;
 }
 
 @utility btn-primary {
@@ -233,22 +234,61 @@ html {
   }
 }
 
+@keyframes mapPinFlickerPurple{
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-purple-500) 80%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 20px transparent;
+  }
+}
+
+@keyframes mapPinFlickerMaroon{
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-maroon) 80%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 20px transparent;
+  }
+}
+@keyframes mapPinFlickerGreen{
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-green-500) 80%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 20px transparent;
+  }
+}
 @utility map-pin-icon-default{
   @apply cursor-pointer bg-primary/70 size-2 rounded-full;
   
 }
 @utility map-pin-icon-default-yellow{
   @apply cursor-pointer bg-yellow-500 size-2 rounded-full;
-  animation: mapPinFlickerYellow 1s infinite ease-out;
+  animation: mapPinFlickerYellow 5s infinite ease-out;
 }
 @utility map-pin-icon-default-orange{
   @apply cursor-pointer bg-orange-500 size-2 rounded-full;
-  animation: mapPinFlickerOrange 1s infinite ease-out;
+  animation: mapPinFlickerOrange 5s infinite ease-out;
 }
 @utility map-pin-icon-default-red{
   @apply cursor-pointer bg-red-500 size-2 rounded-full;
-  animation: mapPinFlickerRed 1s infinite ease-out;
+  animation: mapPinFlickerRed 5s infinite ease-out;
 }
+@utility map-pin-icon-default-purple{
+  @apply cursor-pointer bg-purple-500 size-2 rounded-full;
+  animation: mapPinFlickerPurple 5s infinite ease-out;
+}
+@utility map-pin-icon-default-maroon{
+  @apply cursor-pointer bg-maroon size-2 rounded-full;
+  animation: mapPinFlickerMaroon 5s infinite ease-out;
+}
+@utility map-pin-icon-default-green{
+  @apply cursor-pointer bg-green-500 size-2 rounded-full;
+
+}
+
+
 @keyframes skeletonShimmer {
   0% {
     background-position: -400px 0;

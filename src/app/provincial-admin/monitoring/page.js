@@ -1,6 +1,8 @@
-
+import FloodWatchMap from "@/components/maps/Map"
 export default function page() {
   return (
-    <div>page</div>
+    <section>
+      <FloodWatchMap/>
+    </section>
   )
 }

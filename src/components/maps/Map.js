@@ -8,6 +8,8 @@ import { supabase } from '@/supabase/util/supabase';
 import GeneralCard from '../cards/GeneralCard';
 import CardHeader from '../cards/CardHeader';
 import CardSubHeader from '../cards/CardSubHeader';
+import MapToggleSwitch from './MapToggleSwitch';
+import WeatherMap from './WeatherMap';
 // ─── AQI helpers ────────────────────────────────────────────────────────────
 const AQI_LEVELS = [
   { max: 50, label: 'Good', color: '#22c55e' }, // green
@@ -94,7 +96,11 @@ const getAqiStatusBgClass = (status) => {
   return 'bg-gray-100';
 };
 
-export default function FloodWatchMap() {
+export default function FloodWatchMap({ activeTab: externalTab, onTabChange: externalOnTabChange }) {
+  const [internalTab, setInternalTab] = useState('Risk Mapping');
+  const activeTab = externalTab !== undefined ? externalTab : internalTab;
+  const handleTabChange = externalOnTabChange || setInternalTab;
+
   const [weatherData, setWeatherData] = useState([]);
   const [selectedMuni, setSelectedMuni] = useState(null);
 
@@ -194,8 +200,17 @@ export default function FloodWatchMap() {
 
   const aqiMeta = selectedMuni ? getAqiMeta(selectedMuni.aqi) : null;
 
+  // Immediately display Weather Telemetry map when the tab toggle switch is flipped
+  if (activeTab === 'Weather Telemetry') {
+    return <WeatherMap activeTab={activeTab} onTabChange={handleTabChange} />;
+  }
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '600px', borderRadius: '12px', overflow: 'hidden' }}>
+    <div className="relative w-full h-screen min-h-[600px] rounded-2xl overflow-hidden shadow-sm">
+      {/* ── Floating Map Toggle Switch Overlay (Unconditional & z-50) ── */}
+      <div className={`absolute top-4 z-50 transition-all duration-300 ${selectedMuni ? 'left-4 md:left-[280px]' : 'left-4'}`}>
+        <MapToggleSwitch activeTab={activeTab} onTabChange={handleTabChange} />
+      </div>
 
       {/* ── Map ── */}
       <Map
