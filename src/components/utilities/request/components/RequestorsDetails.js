@@ -1,19 +1,19 @@
 import CardSubHeader from "@/components/cards/CardSubHeader"
 import CardBasedText from "@/components/cards/CardBasedText"
-export default function RequestorsDetails() {
+export default function RequestorsDetails({ profile }) {
   return (
     <div className="grid grid-cols-2 gap-5">
         <div>
             <CardSubHeader className='text-sm text-gray-500'>Name</CardSubHeader>
-            <CardBasedText className='text-xs'>Juan Dela Cruz</CardBasedText>
+            <CardBasedText className='text-xs'>{profile?.full_name}</CardBasedText>
         </div>
         <div>
             <CardSubHeader className='text-sm text-gray-500'>Email</CardSubHeader>
-            <CardBasedText className='text-xs'>[EMAIL_ADDRESS]</CardBasedText>
+            <CardBasedText className='text-xs'>{profile?.email}</CardBasedText>
         </div>
         <div>
             <CardSubHeader className='text-sm text-gray-500'>Contact Number</CardSubHeader>
-            <CardBasedText className='text-xs'>09123456789</CardBasedText>
+            <CardBasedText className='text-xs'>{profile?.mobile_number}</CardBasedText>
         </div>
         <div>
             <CardSubHeader className='text-sm text-gray-500'>Province</CardSubHeader>
@@ -21,11 +21,11 @@ export default function RequestorsDetails() {
         </div>
         <div>
             <CardSubHeader className='text-sm text-gray-500'>Municipality</CardSubHeader>
-            <CardBasedText className='text-xs'>Dumanjugs</CardBasedText>
+            <CardBasedText className='text-xs'>{profile?.municipality_or_city?.name}</CardBasedText>
         </div>
         <div>
             <CardSubHeader className='text-sm text-gray-500'>Organization</CardSubHeader>
-            <CardBasedText className='text-xs'>CDRRMO</CardBasedText>
+            <CardBasedText className='text-xs'>{profile?.organization_name}</CardBasedText>
         </div>
     </div>
   )

@@ -1,3 +1,4 @@
+"use client"
 import { useState, useEffect } from "react"
 import SearchInput from "@/components/forms/SearchInput"
 import PrimaryButton from "@/components/button/PrimaryButton"
