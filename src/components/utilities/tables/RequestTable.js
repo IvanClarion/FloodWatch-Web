@@ -63,9 +63,9 @@ export default function RequestTable() {
   }, [])
 
   return (
-    <Table>
+    <Table className="w-full min-w-0 overflow-hidden">
       <TableScrollWrapper>
-        <DataTable>
+        <DataTable className="w-full min-w-[680px]">
           <TableHead>
             <tr>
               <Th>Requestor</Th>

@@ -14,7 +14,7 @@ export default function BodyChat({ messages = [], userName = "User", isLoading =
   }, [messages, isLoading])
 
   return (
-    <section className='min-h-[55vh] lg:min-h-[63vh] max-h-[70vh] p-4 overflow-y-auto flex flex-col gap-4'>
+    <section className='min-h-[55vh] lg:min-h-[63vh] max-h-[70vh] p-4 overflow-y-auto overflow-x-hidden w-full min-w-0 flex flex-col gap-4'>
       {messages.length === 0 && !isLoading ? (
         <div className="flex flex-col items-center justify-center flex-1 my-auto opacity-70 mt-10">
             <div className="w-16 h-16">

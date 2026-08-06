@@ -13,7 +13,7 @@ export default function PendingRequest() {
     const { count: pendingCount, error } = await supabase
       .from('resource_requests')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'Pending')
+      .in('status', ['Pending', 'pending'])
     
     if (!error && pendingCount !== null) {
       setCount(pendingCount)

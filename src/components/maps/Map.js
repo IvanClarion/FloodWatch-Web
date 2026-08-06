@@ -105,18 +105,56 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
   const [selectedMuni, setSelectedMuni] = useState(null);
 
   useEffect(() => {
-    // ── 1. Initial fetch from the combined view ──────────────────────────────
+    // ── 1. Fetch directly from main tables (municipality_or_city, weather_telemetry, air_quality) ──
     const fetchData = async () => {
-      const { data, error } = await supabase
-        .from('live_municipality_weather')
-        .select('*');
+      try {
+        const [munisRes, weatherRes, airRes] = await Promise.all([
+          supabase.from('municipality_or_city').select('*'),
+          supabase.from('weather_telemetry').select('*').order('fetched_at', { ascending: false }),
+          supabase.from('air_quality').select('*').order('recorded_at', { ascending: false })
+        ]);
 
-      if (error) {
-        // THIS WILL PRINT THE EXACT REASON IT CRASHED!
-        console.error("🚨 EXACT SUPABASE ERROR 🚨:", error.message, error.details, error.hint);
+        const munis = munisRes.data || [];
+        const weatherRecords = weatherRes.data || [];
+        const airRecords = airRes.data || [];
+
+        const mergedData = munis.map((muni) => {
+          const mId = muni.municipality_id;
+          const latestWeather = weatherRecords.find((w) => w.municipality_id === mId) || {};
+          const latestAir = airRecords.find((a) => a.municipality_id === mId) || {};
+
+          const latVal = muni.center_latitude ?? muni.latitude;
+          const lngVal = muni.center_longitude ?? muni.longitude;
+          const lat = parseFloat(latVal);
+          const lng = parseFloat(lngVal);
+
+          return {
+            ...muni,
+            municipality_id: mId,
+            municipality_name: muni.name || muni.municipality_name || "Unknown Municipality",
+            latitude: !isNaN(lat) && lat !== 0 ? lat : null,
+            longitude: !isNaN(lng) && lng !== 0 ? lng : null,
+
+            // Weather telemetry from weather_telemetry
+            temperature: latestWeather.temperature ?? null,
+            rainfall_mm: latestWeather.rainfall_mm ?? null,
+            wind_speed: latestWeather.wind_speed ?? null,
+            weather_condition: latestWeather.weather_condition ?? null,
+            fetched_at: latestWeather.fetched_at ?? null,
+
+            // Air quality from air_quality
+            aqi: latestAir.aqi != null ? Number(latestAir.aqi) : null,
+            pm2_5: latestAir.pm2_5 != null ? Number(latestAir.pm2_5) : null,
+            pm10: latestAir.pm10 != null ? Number(latestAir.pm10) : null,
+            air_quality_status: latestAir.status ?? null,
+            air_recorded_at: latestAir.recorded_at ?? null,
+          };
+        });
+
+        setWeatherData(mergedData);
+      } catch (err) {
+        console.error("Error fetching map telemetry data:", err);
       }
-
-      if (!error && data) setWeatherData(data);
     };
 
     fetchData();

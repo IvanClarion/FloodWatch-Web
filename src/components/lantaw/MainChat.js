@@ -119,7 +119,7 @@ export default function MainChat() {
   }
 
   return (
-    <GeneralCard className='py-0 px-0 relative'>
+    <GeneralCard className='py-0 px-0 relative w-full min-w-0 overflow-hidden border-none'>
         <div className="lantaw-chat-header">
             <div className="flex items-center gap-2">
                 <div className="summary-data-icon">

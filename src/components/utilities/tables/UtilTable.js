@@ -39,9 +39,9 @@ export default function UtilTable() {
   }, [])
 
   return (
-    <Table>
+    <Table className="w-full min-w-0 overflow-hidden">
       <TableScrollWrapper>
-        <DataTable>
+        <DataTable className="w-full min-w-[680px]">
           <TableHead>
             <tr>
               <Th>Name</Th>

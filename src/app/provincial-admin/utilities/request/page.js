@@ -10,7 +10,7 @@ export default function page() {
         <PendingRequest/>
         <TotalCompletedRequest/>
       </div>
-      <div>
+      <div className="w-full min-w-0 overflow-hidden">
         <RequestTable/>
       </div>
     </section>

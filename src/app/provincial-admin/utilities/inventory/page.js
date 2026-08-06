@@ -22,7 +22,7 @@ export default function page() {
       </div>
       
       </div>
-      <div>
+      <div className="w-full min-w-0 overflow-hidden">
         <UtilTable/>
       </div>
     </section>

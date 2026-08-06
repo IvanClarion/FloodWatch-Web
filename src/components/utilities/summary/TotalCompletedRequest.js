@@ -17,7 +17,7 @@ export default function TotalCompletedRequest() {
     const { count: completedCount, error } = await supabase
       .from('resource_requests')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'Fully_Allocated')
+      .in('status', ['Fully_Allocated', 'approved', 'dispatched', 'Completed', 'completed'])
       .gte('created_at', startOfToday)
     
     if (!error && completedCount !== null) {

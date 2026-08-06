@@ -48,64 +48,62 @@ export default function AirQualityMap() {
   const [selectedMuni, setSelectedMuni] = useState(null);
 
   useEffect(() => {
-    // 1. Robust dual-fetch from view and tables to guarantee zero silent failures
+    // Fetch directly from main tables: municipality_or_city, air_quality, weather_telemetry
     const fetchData = async () => {
-      const [viewRes, munisRes, airRes] = await Promise.all([
-        supabase.from('live_municipality_weather').select('*'),
-        supabase.from('municipality_or_city').select('*'),
-        supabase.from('air_quality').select('*').order('recorded_at', { ascending: false })
-      ]);
+      try {
+        const [munisRes, airRes, weatherRes] = await Promise.all([
+          supabase.from('municipality_or_city').select('*'),
+          supabase.from('air_quality').select('*').order('recorded_at', { ascending: false }),
+          supabase.from('weather_telemetry').select('*').order('fetched_at', { ascending: false })
+        ]);
 
-      const viewData = viewRes.data || [];
-      const munisData = munisRes.data || [];
-      const airRecords = airRes.data || [];
+        const munis = munisRes.data || [];
+        const airRecords = airRes.data || [];
+        const weatherRecords = weatherRes.data || [];
 
-      // Use munisData as primary source; if empty due to RLS or permissions, fall back to viewData
-      const sourceData = munisData.length > 0 ? munisData : viewData;
+        const mergedData = munis.map((muni) => {
+          const id = muni.municipality_id || muni.id;
+          const latestAir = airRecords.find((a) => a.municipality_id === id) || {};
+          const latestWeather = weatherRecords.find((w) => w.municipality_id === id) || {};
 
-      const mergedData = sourceData.map((muni) => {
-        const id = muni.municipality_id || muni.id;
-        
-        // Match with latest air quality reading or fallback to view data
-        const latestAir = airRecords.find((a) => a.municipality_id === id) || 
-                          viewData.find((v) => (v.municipality_id || v.id) === id) || 
-                          {};
+          const latVal = muni.center_latitude ?? muni.latitude;
+          const lngVal = muni.center_longitude ?? muni.longitude;
 
-        // Check every possible coordinate column name (center_latitude, latitude, etc.)
-        const latVal = muni.center_latitude ?? muni.latitude ?? latestAir.latitude ?? latestAir.center_latitude;
-        const lngVal = muni.center_longitude ?? muni.longitude ?? latestAir.longitude ?? latestAir.center_longitude;
+          const lat = parseFloat(latVal);
+          const lng = parseFloat(lngVal);
 
-        const lat = parseFloat(latVal);
-        const lng = parseFloat(lngVal);
+          return {
+            ...muni,
+            municipality_id: id,
+            latitude: !isNaN(lat) && lat !== 0 ? lat : null,
+            longitude: !isNaN(lng) && lng !== 0 ? lng : null,
+            municipality_name: muni.name || muni.municipality_name || "Unknown Municipality",
+            
+            // Air quality fields from air_quality
+            aqi: latestAir.aqi != null ? Number(latestAir.aqi) : null,
+            pm2_5: latestAir.pm2_5 != null ? Number(latestAir.pm2_5) : null,
+            pm10: latestAir.pm10 != null ? Number(latestAir.pm10) : null,
+            air_quality_status: latestAir.status ?? null,
+            air_recorded_at: latestAir.recorded_at ?? null,
 
-        const aqi = latestAir.aqi ?? muni.aqi ?? null;
-        const pm2_5 = latestAir.pm2_5 ?? muni.pm2_5 ?? null;
-        const pm10 = latestAir.pm10 ?? muni.pm10 ?? null;
-        const status = latestAir.status ?? latestAir.air_quality_status ?? muni.air_quality_status ?? null;
-        const recorded_at = latestAir.recorded_at ?? latestAir.air_recorded_at ?? muni.air_recorded_at ?? null;
+            // Weather telemetry fields from weather_telemetry
+            temperature: latestWeather.temperature ?? null,
+            rainfall_mm: latestWeather.rainfall_mm ?? null,
+            wind_speed: latestWeather.wind_speed ?? null,
+            weather_condition: latestWeather.weather_condition ?? null,
+            fetched_at: latestWeather.fetched_at ?? null,
+          };
+        });
 
-        return {
-          ...muni,
-          municipality_id: id,
-          latitude: !isNaN(lat) && lat !== 0 ? lat : null,
-          longitude: !isNaN(lng) && lng !== 0 ? lng : null,
-          municipality_name: muni.name || muni.municipality_name || "Unknown Municipality",
-          aqi: aqi != null ? Number(aqi) : null,
-          pm2_5: pm2_5 != null ? Number(pm2_5) : null,
-          pm10: pm10 != null ? Number(pm10) : null,
-          air_quality_status: status,
-          air_recorded_at: recorded_at,
-        };
-      });
-
-      console.log("📍 [AirQualityMap Debug] Total merged items:", mergedData.length, "| Valid GPS items:", mergedData.filter(m => m.latitude != null && m.longitude != null).length, "| Raw Data samples:", { viewData: viewData.slice(0, 2), munisData: munisData.slice(0, 2), airRecords: airRecords.slice(0, 2) });
-
-      setAirData(mergedData);
+        setAirData(mergedData);
+      } catch (err) {
+        console.error("Error fetching AirQualityMap data:", err);
+      }
     };
 
     fetchData();
 
-    // 2. Realtime: Subscribe to air_quality table inserts
+    // Realtime: Subscribe to air_quality & weather_telemetry inserts
     const airChannel = supabase
       .channel('realtime-air-quality-map')
       .on(

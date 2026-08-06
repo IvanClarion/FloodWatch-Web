@@ -80,11 +80,11 @@ function LantawMessageBox({ children, isNew = false }) {
   }, [children])
 
   return (
-    <section ref={ref} className="flex items-start gap-2">
+    <section ref={ref} className="flex items-start gap-2 w-full min-w-0 overflow-hidden">
         <div className="summary-data-icon mt-1 shrink-0">
             <Origami className="size-4"/>
         </div>
-        <div className="text-sm text-slate-700 leading-relaxed lantaw-prose w-full overflow-hidden">
+        <div className="text-sm text-slate-700 leading-relaxed lantaw-prose w-full min-w-0 overflow-hidden break-words">
             {parsedData?.type === 'visualization' ? (
                 <LantawVisualization data={parsedData.data} />
             ) : parsedData?.type === 'document' ? (

@@ -3,7 +3,7 @@ import clsx from "clsx";
 
 const TableScrollWrapper = forwardRef(({ className, children }, ref) => {
   return (
-    <div ref={ref} className={clsx("table-scroll-wrapper", className)}>
+    <div ref={ref} className={clsx("table-scroll-wrapper w-full overflow-x-auto", className)}>
       {children}
     </div>
   );
