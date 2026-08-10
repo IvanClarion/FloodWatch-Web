@@ -2,6 +2,7 @@ import os
 import json
 import sys
 import mimetypes
+import re
 from pathlib import Path
 
 class LantawScanAndAnalysis:
@@ -9,17 +10,14 @@ class LantawScanAndAnalysis:
     The entry-point scanner for Lantaw AI's file processing pipeline.
     
     When a file is uploaded, this class determines the file type,
-    validates it, and routes it to the correct extraction handler:
+    validates it, routes it to the correct extraction handler, and cleanses data:
       - Document files (.pdf, .docx, .xlsx, .csv, .txt) → LantawExtractDataFromFiles
       - Image files (.png, .jpg, .jpeg, .webp) → LantawExtractDataFromImage
     
-    After extraction, it runs Lantaw AI-powered duplication detection
-    against existing database records before allowing insertion.
-    
-    It also performs basic safety checks (file size, extension whitelist).
+    After extraction, it runs deterministic name deduplication and AI-powered
+    duplication detection against the specific target database table (utilities or pdrrmo_inventory).
     """
 
-    # Supported file categories and their extensions
     DOCUMENT_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".csv", ".txt"]
     IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"]
     ALLOWED_EXTENSIONS = DOCUMENT_EXTENSIONS + IMAGE_EXTENSIONS
@@ -29,13 +27,6 @@ class LantawScanAndAnalysis:
 
     @staticmethod
     def identify_file_type(file_path: str) -> str:
-        """
-        Identifies whether the uploaded file is a 'document' or 'image'
-        based on its extension.
-        
-        Returns:
-            'document' | 'image' | 'unsupported'
-        """
         ext = Path(file_path).suffix.lower()
 
         if ext in LantawScanAndAnalysis.DOCUMENT_EXTENSIONS:
@@ -47,20 +38,11 @@ class LantawScanAndAnalysis:
 
     @staticmethod
     def validate_file(file_path: str) -> dict:
-        """
-        Performs pre-processing validation on the uploaded file.
-        Checks: existence, extension whitelist, and file size limit.
-
-        Returns:
-            dict with keys: 'valid' (bool), 'error' (str|None), 'file_type' (str|None), 'metadata' (dict|None)
-        """
         path = Path(file_path)
 
-        # 1. Check existence
         if not path.exists():
             return {"valid": False, "error": "File does not exist.", "file_type": None, "metadata": None}
 
-        # 2. Check extension
         ext = path.suffix.lower()
         if ext not in LantawScanAndAnalysis.ALLOWED_EXTENSIONS:
             return {
@@ -70,7 +52,6 @@ class LantawScanAndAnalysis:
                 "metadata": None
             }
 
-        # 3. Check file size
         file_size = path.stat().st_size
         if file_size > LantawScanAndAnalysis.MAX_FILE_SIZE_BYTES:
             size_mb = file_size / (1024 * 1024)
@@ -81,7 +62,6 @@ class LantawScanAndAnalysis:
                 "metadata": None
             }
 
-        # 4. Determine type
         file_type = LantawScanAndAnalysis.identify_file_type(file_path)
         mime_type, _ = mimetypes.guess_type(file_path)
 
@@ -96,61 +76,161 @@ class LantawScanAndAnalysis:
         return {"valid": True, "error": None, "file_type": file_type, "metadata": metadata}
 
     @staticmethod
-    def _fetch_existing_utilities() -> list:
+    def _fetch_existing_records(target_table: str = "utilities") -> list:
         """
-        Fetches existing utilities from the Supabase database
-        for duplication comparison.
+        Fetches existing records ONLY from the specific target database table (utilities or pdrrmo_inventory).
+        Enforces strict table isolation.
         """
         try:
             from lantaw.utilities.LantawSources import supabase
-            response = supabase.table('utilities').select('id, name, type, serial_number').execute()
-            return response.data or []
+            if target_table == "pdrrmo_inventory":
+                response = supabase.table('pdrrmo_inventory').select('item_id, item_name, category, control_number').execute()
+                return response.data or []
+            else:
+                response = supabase.table('utilities').select('id, name, type, serial_number').execute()
+                return response.data or []
         except Exception as e:
-            print(f"Warning: Could not fetch existing utilities for duplication check: {e}", file=sys.stderr)
+            print(f"Warning: Could not fetch existing records from {target_table} for duplication check: {e}", file=sys.stderr)
             return []
 
     @staticmethod
-    def _check_for_duplicates(extracted_items: list) -> dict:
-        """
-        Runs Lantaw AI-powered duplication detection on extracted items
-        against the existing database records.
+    def normalize_name(name_str: str) -> str:
+        """Helper to convert item names to a clean lowercase alphanumeric representation."""
+        if not name_str:
+            return ""
+        return re.sub(r'[^a-z0-9]', '', str(name_str).lower())
 
-        Returns:
-            dict with keys: 'has_duplicates' (bool), 'duplicates' (list), 'report' (str)
+    @staticmethod
+    def cleanse_and_filter_items(extracted_items: list, target_table: str = "utilities") -> dict:
+        """
+        Cleanses extracted items by:
+          1. Discarding invalid/noise rows (empty, missing primary fields, or header/total text)
+          2. Deterministic Name Deduplication (detecting duplicate item names within file)
+          3. Deterministic DB Name Deduplication (detecting item names matching active target_table in DB)
+          4. AI Semantic Deduplication (catching non-exact synonyms like 'Life Vest' ↔ 'Life Jacket')
         """
         from lantaw.utilities.LantawDuplicationDetection import LantawDuplicationDetection
 
-        existing = LantawScanAndAnalysis._fetch_existing_utilities()
+        if not isinstance(extracted_items, list):
+            return {
+                "cleaned_items": [],
+                "cleansing_insight": {
+                    "total_raw": 0,
+                    "discarded_invalid": 0,
+                    "duplicates_removed": 0,
+                    "reasons": []
+                }
+            }
 
-        if not existing:
-            # No existing records, so no duplicates possible
-            return {"has_duplicates": False, "duplicates": [], "report": "No existing records to compare against."}
+        total_raw = len(extracted_items)
+        valid_items = []
+        discarded_invalid = 0
+        reasons = []
 
-        # Run AI-powered detection
-        duplicates = LantawDuplicationDetection.detect_duplicate_utilities(extracted_items, existing)
-        report = LantawDuplicationDetection.format_duplicate_report(duplicates)
+        # 1. Filter invalid / noise rows
+        for index, item in enumerate(extracted_items):
+            if not isinstance(item, dict):
+                discarded_invalid += 1
+                continue
+
+            name_val = str(item.get("name") or item.get("item_name") or "").strip()
+            type_val = str(item.get("type") or item.get("category") or item.get("item_type") or "").strip()
+            serial_val = str(item.get("serial_number") or item.get("control_number") or "").strip()
+
+            is_noise = (
+                not name_val or 
+                name_val.lower() in ["total", "grand total", "summary", "subtotal", "name", "item name", "item", "description"] or
+                (not type_val and not serial_val and len(name_val) < 2)
+            )
+
+            if is_noise:
+                discarded_invalid += 1
+                if name_val:
+                    reasons.append(f"Discarded non-inventory/header row '{name_val}'")
+            else:
+                valid_items.append(item)
+
+        # 2. Deterministic Internal Name Deduplication (File Scope)
+        seen_file_names = set()
+        items_after_internal_name = []
+        internal_name_dups_count = 0
+
+        for item in valid_items:
+            raw_name = item.get("name") or item.get("item_name") or ""
+            norm_name = LantawScanAndAnalysis.normalize_name(raw_name)
+
+            if norm_name in seen_file_names:
+                internal_name_dups_count += 1
+                reasons.append(f"Removed duplicate item name '{raw_name}' repeated within file")
+            else:
+                seen_file_names.add(norm_name)
+                items_after_internal_name.append(item)
+
+        # 3. Deterministic Database Name Deduplication (Active Table Scope)
+        existing_db = LantawScanAndAnalysis._fetch_existing_records(target_table)
+        existing_db_names = set()
+        for db_row in existing_db:
+            db_name = db_row.get("name") or db_row.get("item_name") or ""
+            norm_db = LantawScanAndAnalysis.normalize_name(db_name)
+            if norm_db:
+                existing_db_names.add(norm_db)
+
+        items_after_db_name = []
+        db_name_dups_count = 0
+
+        for item in items_after_internal_name:
+            raw_name = item.get("name") or item.get("item_name") or ""
+            norm_name = LantawScanAndAnalysis.normalize_name(raw_name)
+
+            if norm_name in existing_db_names:
+                db_name_dups_count += 1
+                tbl_label = "PDRRMO Command Center" if target_table == "pdrrmo_inventory" else "Shared Inventory"
+                reasons.append(f"Removed database duplicate item name '{raw_name}' already in {tbl_label}")
+            else:
+                items_after_db_name.append(item)
+
+        # 4. AI Semantic Deduplication (Catching Synonyms/Variations)
+        items_after_ai = items_after_db_name
+        ai_dups_count = 0
+
+        if len(items_after_db_name) > 0 and existing_db:
+            try:
+                if target_table == "pdrrmo_inventory":
+                    db_duplicates = LantawDuplicationDetection.detect_duplicate_inventory(items_after_db_name, existing_db)
+                else:
+                    db_duplicates = LantawDuplicationDetection.detect_duplicate_utilities(items_after_db_name, existing_db)
+
+                ai_dup_indices = set()
+                for dup in db_duplicates:
+                    inc_idx = dup.get("incoming_index")
+                    if inc_idx is not None and 0 <= inc_idx < len(items_after_db_name):
+                        ai_dup_indices.add(inc_idx)
+                        reason_txt = dup.get("reason") or "Semantic duplicate found"
+                        item_name_str = items_after_db_name[inc_idx].get("name") or items_after_db_name[inc_idx].get("item_name") or ""
+                        reasons.append(f"Lantaw AI removed semantic duplicate '{item_name_str}' ({reason_txt})")
+
+                items_after_ai = [item for i, item in enumerate(items_after_db_name) if i not in ai_dup_indices]
+                ai_dups_count = len(ai_dup_indices)
+            except Exception as e:
+                print(f"AI duplication check warning: {e}", file=sys.stderr)
+
+        total_duplicates_removed = internal_name_dups_count + db_name_dups_count + ai_dups_count
 
         return {
-            "has_duplicates": len(duplicates) > 0,
-            "duplicates": duplicates,
-            "report": report
+            "cleaned_items": items_after_ai,
+            "cleansing_insight": {
+                "total_raw": total_raw,
+                "discarded_invalid": discarded_invalid,
+                "duplicates_removed": total_duplicates_removed,
+                "reasons": reasons
+            }
         }
 
     @staticmethod
-    def scan_and_route(file_path: str) -> dict:
+    def scan_and_route(file_path: str, target_table: str = "utilities") -> dict:
         """
         Main orchestrator method. Validates the file, routes it to the
-        correct extractor, then runs duplication detection.
-
-        Pipeline:
-          1. Validate file (size, extension)
-          2. Extract data (document or image)
-          3. Check for duplicates against existing database records
-          4. Return result (success or error with duplicate details)
-
-        Returns:
-            dict with keys: 'success' (bool), 'file_type' (str), 'data' (dict|str), 
-                            'duplicates' (list|None), 'error' (str|None)
+        correct extractor, cleanses & deduplicates items against target_table, and returns insights.
         """
         from lantaw.utilities.LantawExtractDataFromFiles import LantawExtractDataFromFiles
         from lantaw.utilities.LantawExtractDataFromImage import LantawExtractDataFromImage
@@ -162,14 +242,13 @@ class LantawScanAndAnalysis:
                 "success": False,
                 "file_type": None,
                 "data": None,
-                "duplicates": None,
                 "error": validation["error"]
             }
 
         file_type = validation["file_type"]
         metadata = validation["metadata"]
 
-        # Step 2: Route to the correct extractor
+        # Step 2: Route to correct extractor
         try:
             if file_type == "document":
                 extracted = LantawExtractDataFromFiles.extract(file_path)
@@ -180,17 +259,14 @@ class LantawScanAndAnalysis:
                     "success": False,
                     "file_type": file_type,
                     "data": None,
-                    "duplicates": None,
                     "error": "No extractor available for this file type."
                 }
 
-            # Check if extraction itself failed
             if extracted.get("error"):
                 return {
                     "success": False,
                     "file_type": file_type,
                     "data": None,
-                    "duplicates": None,
                     "error": extracted["error"]
                 }
 
@@ -199,62 +275,34 @@ class LantawScanAndAnalysis:
                 "success": False,
                 "file_type": file_type,
                 "data": None,
-                "duplicates": None,
                 "error": f"Extraction failed: {str(e)}"
             }
 
-        # Step 3: Run duplication detection against the database
-        extracted_items = extracted.get("content", [])
-        duplicate_result = {"has_duplicates": False, "duplicates": [], "report": ""}
+        raw_content = extracted.get("content", [])
 
-        if isinstance(extracted_items, list) and len(extracted_items) > 0:
-            try:
-                duplicate_result = LantawScanAndAnalysis._check_for_duplicates(extracted_items)
-            except Exception as e:
-                # Duplication check failure should not block the pipeline,
-                # but we log it and include a warning
-                print(f"Warning: Duplication check failed: {e}", file=sys.stderr)
+        if file_type == "image" and isinstance(raw_content, str):
+            from lantaw.utilities.LantawExtractDataFromImage import LantawExtractDataFromImage
+            parsed = LantawExtractDataFromImage.parse_extracted_json(raw_content)
+            raw_content = parsed.get("extracted_items", [])
 
-        if duplicate_result["has_duplicates"]:
-            return {
-                "success": False,
-                "file_type": file_type,
-                "metadata": metadata,
-                "data": extracted,
-                "duplicates": duplicate_result["duplicates"],
-                "error": f"Lantaw AI detected duplicate items already in the database.\n{duplicate_result['report']}"
-            }
+        # Step 3: Cleanse, Filter Noise, and Remove Duplicates (Strict Table Scope)
+        cleansing_res = LantawScanAndAnalysis.cleanse_and_filter_items(raw_content, target_table)
 
-        # Step 4: All clear — return extracted data
+        cleaned_items = cleansing_res["cleaned_items"]
+        insight = cleansing_res["cleansing_insight"]
+
         return {
             "success": True,
             "file_type": file_type,
             "metadata": metadata,
-            "data": extracted,
-            "duplicates": None,
+            "data": {
+                "extracted_items": cleaned_items,
+                "cleansing_insight": insight
+            },
             "error": None
         }
 
-    @staticmethod
-    def get_scan_instructions() -> str:
-        """
-        Returns the system prompt segment that instructs the AI on how
-        to handle uploaded file data during the thinking/decision phase.
-        """
-        return (
-            "\n\n--- FILE SCAN & ANALYSIS INSTRUCTIONS ---\n"
-            "When a user uploads a file, it will be scanned and its contents extracted automatically.\n"
-            "You will receive the extracted data as structured context.\n"
-            "1. DOCUMENT FILES (PDF, DOCX, XLSX, CSV, TXT): Raw text or tabular data will be extracted and provided.\n"
-            "2. IMAGE FILES (PNG, JPG, JPEG, WEBP): The image will be analyzed using vision capabilities.\n"
-            "3. VALIDATION: Files exceeding 10MB or with unsupported extensions will be rejected before processing.\n"
-            "4. DUPLICATION: Extracted items are checked against the existing database. Duplicates are flagged and blocked.\n"
-            "5. Your role is to interpret the extracted data and respond to the user's query about that data.\n"
-            "6. NEVER fabricate file contents. Only reference what was actually extracted.\n"
-        )
-
 if __name__ == "__main__":
-    # Ensure src directory is in sys.path so 'lantaw' package can be imported
     src_path = str(Path(__file__).resolve().parent.parent.parent)
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
@@ -264,7 +312,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     file_to_process = sys.argv[1]
-    result = LantawScanAndAnalysis.scan_and_route(file_to_process)
+    target_tbl = sys.argv[2] if len(sys.argv) > 2 else "utilities"
+    result = LantawScanAndAnalysis.scan_and_route(file_to_process, target_tbl)
     
-    # Print exactly the JSON output so Node.js can parse it easily
     print(json.dumps(result, default=str))

@@ -30,12 +30,14 @@ export async function POST(request) {
         
         await writeFile(tempFilePath, buffer)
 
+        const targetTable = formData.get('target_table') || 'utilities'
+
         // 2. Execute Python script
         // Path to the Python script relative to the project root
         const scriptPath = join(process.cwd(), 'src', 'lantaw', 'utilities', 'LantawScanandAnalysis.py')
         
         // Use 'python' or 'python3' depending on the environment, assuming 'python' for Windows
-        const command = `python "${scriptPath}" "${tempFilePath}"`
+        const command = `python "${scriptPath}" "${tempFilePath}" "${targetTable}"`
         
         const { stdout, stderr } = await execAsync(command)
 

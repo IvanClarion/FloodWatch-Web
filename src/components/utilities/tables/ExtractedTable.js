@@ -10,16 +10,16 @@ import SingleLineSkeleton from "@/components/skeleton/SingleLineSkeleton"
 
 export default function ExtractedTable({ data, isRendering }) {
   return (
-    <Table>
+    <Table className="w-full min-w-0 overflow-hidden">
       <TableScrollWrapper>
-        <DataTable>
+        <DataTable className="w-full min-w-[680px]">
           <TableHead>
             <tr>
-              <Th>Name</Th>
-              <Th>Type</Th>
-              <Th>Serial Number</Th>
+              <Th>Item Name</Th>
+              <Th>Type / Category</Th>
+              <Th>Control / Serial No.</Th>
               <Th>Quantity</Th>
-              <Th>Description</Th>
+              <Th>Location / Description</Th>
             </tr>
           </TableHead>
           <tbody>
@@ -37,16 +37,28 @@ export default function ExtractedTable({ data, isRendering }) {
             ) : data && data.length > 0 ? (
               data.map((item) => (
                 <TableRow key={item.id}>
-                  <TableData>{item.name}</TableData>
-                  <TableDataMuted>{item.type}</TableDataMuted>
-                  <TableDataMuted>{item.serial_number}</TableDataMuted>
-                  <TableData>{item.quantity}</TableData>
-                  <TableDataMuted className="truncate max-w-[200px]">{item.description}</TableDataMuted>
+                  <TableData className="font-semibold text-gray-800">
+                    {item.item_name || item.name || "N/A"}
+                  </TableData>
+                  <TableDataMuted>
+                    {item.category || item.type || item.item_type || "N/A"}
+                  </TableDataMuted>
+                  <TableDataMuted className="font-mono text-xs">
+                    {item.control_number || item.serial_number || "N/A"}
+                  </TableDataMuted>
+                  <TableData className="font-bold text-primary">
+                    {item.total_quantity ?? item.quantity ?? 1} units
+                  </TableData>
+                  <TableDataMuted className="truncate max-w-[200px]">
+                    {item.storage_location || item.description || "N/A"}
+                  </TableDataMuted>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableData colSpan={5} className="text-center text-gray-400">No data extracted yet</TableData>
+                <TableData colSpan={5} className="text-center text-gray-400 py-8">
+                  No data extracted yet
+                </TableData>
               </TableRow>
             )}
           </tbody>

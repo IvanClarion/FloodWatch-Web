@@ -1,16 +1,15 @@
 import { Suspense } from "react"
 import SummaryData from "@/components/contributors/SummaryData"
 import SummaryDataSkeleton from "@/components/contributors/SummaryDataSkeleton"
-import ContributorTable from "@/components/table/national-admin/ContributorTable"
-import UserModal from "./UserModal"
+import ContributorTabWrapper from "@/components/contributors/ContributorTabWrapper"
 
-export default function page() {
+export default function ContributorPage() {
   return (
     <main className="grid gap-5">
       <Suspense fallback={<SummaryDataSkeleton />}>
         <SummaryData />
       </Suspense>
-      <ContributorTable />
+      <ContributorTabWrapper />
     </main>
   )
 }

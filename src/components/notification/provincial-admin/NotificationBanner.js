@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Trash, Loader2, MoreVertical, CheckCheck } from "lucide-react"
+import { Trash, MoreVertical, CheckCheck } from "lucide-react"
 import CardSubHeader from "@/components/cards/CardSubHeader"
 import CardBasedText from "@/components/cards/CardBasedText"
 import { supabase } from "@/supabase/util/supabase"
@@ -17,7 +17,7 @@ export default function NotificationBanner({ searchTerm, sortOrder }) {
     let query = supabase
       .from('notifications')
       .select('*')
-      .in('target_role', ['all', 'national_admin'])
+      .in('target_role', ['all', 'provincial_admin'])
       .order('created_at', { ascending: sortOrder === 'asc' })
 
     if (searchTerm && searchTerm.trim()) {
@@ -27,7 +27,7 @@ export default function NotificationBanner({ searchTerm, sortOrder }) {
     const { data, error } = await query
 
     if (error) {
-      console.error("Error fetching notifications:", error)
+      console.error("Error fetching provincial notifications:", error)
     } else {
       setNotifications(data || [])
     }
@@ -39,7 +39,7 @@ export default function NotificationBanner({ searchTerm, sortOrder }) {
 
     // Realtime subscription
     const channel = supabase
-      .channel('notifications_channel')
+      .channel('provincial_notifications_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
         fetchNotifications()
       })
@@ -128,8 +128,8 @@ export default function NotificationBanner({ searchTerm, sortOrder }) {
 
   if (notifications.length === 0) {
     return (
-      <div className="text-center p-10 text-gray-500 text-sm">
-        No notifications found.
+      <div className="text-center p-10 text-gray-500 text-sm font-medium">
+        No provincial notifications found.
       </div>
     )
   }
