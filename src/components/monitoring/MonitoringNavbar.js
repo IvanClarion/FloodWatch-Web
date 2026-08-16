@@ -6,9 +6,10 @@ import ToogleButton from "../button/ToogleButton"
 import ToogleButtonLayout from "../button/ToogleButtonLayout"
 
 const navLinks = [
-  { name: "Rainfall", href: "/provincial-admin/monitoring", exact: true },
-  { name: "Air Quality", href: "/provincial-admin/monitoring/air-map" },
-  { name: "Report Map", href: "/provincial-admin/monitoring/report-map" },
+  { name: "Weather", href: "/provincial-admin/monitoring", exact: true },
+  { name: "Air", href: "/provincial-admin/monitoring/air-map" },
+  { name: "Hazards", href: "/provincial-admin/monitoring/hazard-map" },
+  { name: "Report", href: "/provincial-admin/monitoring/report-map" },
   { name: "LGU", href: "/provincial-admin/monitoring/lgu-monitoring" }
 ]
 

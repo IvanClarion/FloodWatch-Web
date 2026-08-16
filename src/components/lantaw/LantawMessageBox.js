@@ -27,10 +27,32 @@ function LantawMessageBox({ children, isNew = false }) {
       } else {
         // Fallback for when AI doesn't wrap with backticks
         const startIdx = children.indexOf('{')
-        const endIdx = children.indexOf('}') // Look for first closing brace (metadata block is short)
-        if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
-          jsonStr = children.substring(startIdx, endIdx + 1)
-          remainingText = children.substring(endIdx + 1).trim()
+        if (startIdx !== -1) {
+          let braceCount = 0;
+          let endIdx = -1;
+          let inString = false;
+          let escape = false;
+          for (let i = startIdx; i < children.length; i++) {
+            const char = children[i];
+            if (char === '"' && !escape) inString = !inString;
+            if (char === '\\' && !escape) escape = true;
+            else escape = false;
+
+            if (!inString) {
+              if (char === '{') braceCount++;
+              if (char === '}') braceCount--;
+            }
+
+            if (braceCount === 0 && char === '}') {
+              endIdx = i;
+              break;
+            }
+          }
+          if (endIdx !== -1) {
+            jsonStr = children.substring(startIdx, endIdx + 1)
+            remainingText = children.substring(0, startIdx) + children.substring(endIdx + 1)
+            remainingText = remainingText.trim()
+          }
         }
       }
 

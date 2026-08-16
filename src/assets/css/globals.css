@@ -4,6 +4,14 @@ html {
   scroll-behavior: smooth;
 }
 
+:root {
+  --chart-1: 221.2 83.2% 53.3%; /* Blue */
+  --chart-2: 340 75% 54%;       /* Pink/Red */
+  --chart-3: 45 93% 47%;        /* Yellow/Orange */
+  --chart-4: 160 84% 39%;       /* Green */
+  --chart-5: 280 65% 60%;       /* Purple */
+}
+
 @theme {
   --color-accent: #BFE8FF;
   --color-primary: #0035A9;
