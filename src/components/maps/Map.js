@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import Map, { Marker, NavigationControl } from 'react-map-gl/mapbox';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Map, { Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
 import { X, Thermometer, CloudRain, Wind, Cloud, Microscope, Waves, Leaf } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/supabase/util/supabase';
@@ -10,6 +10,57 @@ import CardHeader from '../cards/CardHeader';
 import CardSubHeader from '../cards/CardSubHeader';
 import MapToggleSwitch from './MapToggleSwitch';
 import WeatherMap from './WeatherMap';
+
+// ─── Layer Style Definitions for GPU Canvas Rendering ──────────────────────
+const pinCircleLayer = {
+  id: 'municipality-pins',
+  type: 'circle',
+  paint: {
+    'circle-radius': [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      7, 5,
+      10, 8,
+      14, 12
+    ],
+    'circle-color': [
+      'match',
+      ['get', 'severity'],
+      3, '#ef4444', // red
+      2, '#f97316', // orange
+      1, '#eab308', // yellow
+      '#0035A9'     // default primary blue
+    ],
+    'circle-stroke-width': 2,
+    'circle-stroke-color': '#ffffff',
+    'circle-opacity': 0.95,
+  }
+};
+
+const pinLabelLayer = {
+  id: 'municipality-labels',
+  type: 'symbol',
+  layout: {
+    'text-field': ['get', 'municipality_name'],
+    'text-size': [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      8, 10,
+      11, 12,
+      14, 14
+    ],
+    'text-offset': [0, 1.2],
+    'text-anchor': 'top',
+    'text-optional': true,
+  },
+  paint: {
+    'text-color': '#1f2937',
+    'text-halo-color': '#ffffff',
+    'text-halo-width': 1.5,
+  }
+};
 // ─── AQI helpers ────────────────────────────────────────────────────────────
 const AQI_LEVELS = [
   { max: 50, label: 'Good', color: '#22c55e' }, // green
@@ -40,15 +91,6 @@ const aqiSeverity = (aqi) => {
   if (aqi > 100) return 2;
   if (aqi > 50) return 1;
   return 0;
-};
-
-// ─── Marker class based on worst of rain or AQI ──────────────────────────────
-const getMarkerClass = (muni) => {
-  const sev = Math.max(rainSeverity(muni.rainfall_mm), aqiSeverity(muni.aqi));
-  if (sev >= 3) return 'map-pin-icon-default-red';
-  if (sev === 2) return 'map-pin-icon-default-orange';
-  if (sev === 1) return 'map-pin-icon-default-yellow';
-  return 'map-pin-icon-default';
 };
 
 // ─── Popup row helper ────────────────────────────────────────────────────────
@@ -103,6 +145,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
 
   const [weatherData, setWeatherData] = useState([]);
   const [selectedMuni, setSelectedMuni] = useState(null);
+  const [cursor, setCursor] = useState('auto');
 
   useEffect(() => {
     // ── 1. Fetch directly from main tables (municipality_or_city, weather_telemetry, air_quality) ──
@@ -221,20 +264,55 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     [124.50, 11.50],
   ];
 
-  // Only render municipalities that have valid coordinates
-  const validMarkers = weatherData.filter(
-    (m) =>
-      m.latitude != null && m.longitude != null &&
-      isFinite(m.latitude) && isFinite(m.longitude)
-  );
+  // ── Step 1: Memoized GeoJSON FeatureCollection ─────────────────────────────
+  const geojsonData = useMemo(() => {
+    const features = weatherData
+      .filter(
+        (m) =>
+          m.latitude != null &&
+          m.longitude != null &&
+          isFinite(m.latitude) &&
+          isFinite(m.longitude)
+      )
+      .map((muni) => {
+        const rSev = rainSeverity(muni.rainfall_mm);
+        const aSev = aqiSeverity(muni.aqi);
+        const severity = Math.max(rSev, aSev);
 
-  if (weatherData.length > 0 && validMarkers.length === 0) {
-    console.warn(
-      '[FloodWatchMap] All municipalities were filtered out — latitude/longitude are null in the view. ' +
-      'Run the updated live_municipality_weather_view.sql in Supabase.',
-      weatherData[0] // log first row so you can inspect the column names
-    );
-  }
+        return {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [muni.longitude, muni.latitude],
+          },
+          properties: {
+            ...muni,
+            severity,
+          },
+        };
+      });
+
+    return {
+      type: 'FeatureCollection',
+      features,
+    };
+  }, [weatherData]);
+
+  // ── Step 5: Handle Map Feature Click ──────────────────────────────────────
+  const handleMapClick = useCallback((event) => {
+    const feature = event.features && event.features[0];
+    if (feature) {
+      const muniId = feature.properties?.municipality_id;
+      const matchedMuni = weatherData.find(
+        (m) => String(m.municipality_id) === String(muniId)
+      ) || feature.properties;
+
+      setSelectedMuni(matchedMuni);
+    }
+  }, [weatherData]);
+
+  const handleMouseEnter = useCallback(() => setCursor('pointer'), []);
+  const handleMouseLeave = useCallback(() => setCursor('auto'), []);
 
   const aqiMeta = selectedMuni ? getAqiMeta(selectedMuni.aqi) : null;
 
@@ -250,29 +328,25 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
         <MapToggleSwitch activeTab={activeTab} onTabChange={handleTabChange} />
       </div>
 
-      {/* ── Map ── */}
+      {/* ── Map with WebGL Layer Rendering ── */}
       <Map
         initialViewState={{ latitude: 10.3157, longitude: 123.8854, zoom: 8.5 }}
         maxBounds={cebuBounds}
         mapStyle="mapbox://styles/apex-yoshi/cmp0s3wq700bg01sx2y9i69pw"
         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
+        interactiveLayerIds={['municipality-pins']}
+        onClick={handleMapClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        cursor={cursor}
       >
         <NavigationControl position="top-right" />
 
-        {/* ── Markers ── */}
-        {validMarkers.map((muni) => (
-          <Marker
-            key={muni.municipality_id}
-            longitude={muni.longitude}
-            latitude={muni.latitude}
-            onClick={(e) => {
-              e.originalEvent.stopPropagation();
-              setSelectedMuni(muni);
-            }}
-          >
-            <div className={getMarkerClass(muni)} />
-          </Marker>
-        ))}
+        {/* ── Step 3 & 4: Single GeoJSON Source + GPU Circle & Symbol Layers ── */}
+        <Source id="municipalities-source" type="geojson" data={geojsonData} cluster={false}>
+          <Layer {...pinCircleLayer} />
+          <Layer {...pinLabelLayer} />
+        </Source>
       </Map>
 
       {/* ── Floating detail panel (left side) ── */}

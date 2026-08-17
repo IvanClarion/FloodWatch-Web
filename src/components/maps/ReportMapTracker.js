@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import Map, { Marker, NavigationControl } from 'react-map-gl/mapbox';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Map, { Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
 import { X, AlertTriangle, MapPin, Calendar, Clock, CheckCircle2, FileText, ImageIcon, ShieldAlert, Layers } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/supabase/util/supabase';
@@ -9,6 +9,50 @@ import GeneralCard from '../cards/GeneralCard';
 import CardHeader from '../cards/CardHeader';
 import CardSubHeader from '../cards/CardSubHeader';
 import CardBasedText from '../cards/CardBasedText';
+
+// ─── Layer Style Definitions for GPU Canvas Rendering ──────────────────────
+const pinCircleLayer = {
+  id: 'incident-pins',
+  type: 'circle',
+  paint: {
+    'circle-radius': [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      7, 5,
+      10, 8,
+      14, 12
+    ],
+    'circle-color': '#800000',
+    'circle-stroke-width': 2,
+    'circle-stroke-color': '#ffffff',
+    'circle-opacity': 0.95,
+  }
+};
+
+const pinLabelLayer = {
+  id: 'incident-labels',
+  type: 'symbol',
+  layout: {
+    'text-field': ['get', 'hazard_type'],
+    'text-size': [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      8, 10,
+      11, 11.5,
+      14, 13
+    ],
+    'text-offset': [0, 1.2],
+    'text-anchor': 'top',
+    'text-optional': true,
+  },
+  paint: {
+    'text-color': '#800000',
+    'text-halo-color': '#ffffff',
+    'text-halo-width': 1.5,
+  }
+};
 
 // ─── Universal Coordinate Parser with support for Municipality & Specific Locations ───
 const extractCoordinates = (report, muni, specificLoc) => {
@@ -74,6 +118,7 @@ const Row = ({ icon, label, value }) => (
 export default function ReportMapTracker() {
   const [incidents, setIncidents] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [cursor, setCursor] = useState('auto');
 
   useEffect(() => {
     // 1. Fetch incident reports along with municipality and potential specific location tables
@@ -155,49 +200,74 @@ export default function ReportMapTracker() {
     };
   }, []);
 
-  // Only render markers for incidents with valid numerical coordinates
-  const validMarkers = incidents.filter(
-    (m) => m.latitude != null && m.longitude != null && isFinite(m.latitude) && isFinite(m.longitude)
-  );
+  // ── Step 1: Memoized GeoJSON FeatureCollection ─────────────────────────────
+  const geojsonData = useMemo(() => {
+    const features = incidents
+      .filter(
+        (m) =>
+          m.latitude != null &&
+          m.longitude != null &&
+          isFinite(m.latitude) &&
+          isFinite(m.longitude)
+      )
+      .map((rep) => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [rep.longitude, rep.latitude],
+        },
+        properties: {
+          ...rep,
+        },
+      }));
+
+    return {
+      type: 'FeatureCollection',
+      features,
+    };
+  }, [incidents]);
+
+  // ── Step 5: Handle Map Canvas Click ───────────────────────────────────────
+  const handleMapClick = useCallback((event) => {
+    const feature = event.features && event.features[0];
+    if (feature) {
+      const repId = feature.properties?.report_id;
+      const matchedReport = incidents.find(
+        (r) => String(r.report_id) === String(repId)
+      ) || feature.properties;
+
+      setSelectedReport(matchedReport);
+    }
+  }, [incidents]);
+
+  const handleMouseEnter = useCallback(() => setCursor('pointer'), []);
+  const handleMouseLeave = useCallback(() => setCursor('auto'), []);
 
   const activeStatus = selectedReport ? getStatusBadge(selectedReport.status) : null;
+  const mappedCount = geojsonData.features.length;
 
   return (
     <div className="relative w-full h-[85vh] xl:h-screen min-h-[600px] rounded-2xl overflow-hidden shadow-sm border border-gray-200/80">
 
-      {/* ── Mapbox Canvas ── */}
+      {/* ── Mapbox Canvas with WebGL GPU Rendering ── */}
       <Map
         initialViewState={{ latitude: 10.3157, longitude: 123.8854, zoom: 8.5 }}
         mapStyle="mapbox://styles/apex-yoshi/cmp0s3wq700bg01sx2y9i69pw"
         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
         style={{ width: '100%', height: '100%' }}
+        interactiveLayerIds={['incident-pins']}
+        onClick={handleMapClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        cursor={cursor}
       >
         <NavigationControl position="top-right" />
 
-        {/* ── Incident Markers ── */}
-        {validMarkers.map((rep) => (
-          <Marker
-            key={rep.report_id || Math.random()}
-            longitude={rep.longitude}
-            latitude={rep.latitude}
-            onClick={(e) => {
-              e.originalEvent.stopPropagation();
-              setSelectedReport(rep);
-            }}
-          >
-            <div 
-              className="map-pin-icon-default-maroon cursor-pointer size-3 rounded-full transition-transform hover:scale-125" 
-              style={{ 
-                width: '12px', 
-                height: '12px', 
-                borderRadius: '50%', 
-                backgroundColor: '#800000', // Maroon fallback style
-                boxShadow: '0 0 0 2px white, 0 2px 5px rgba(0,0,0,0.4)'
-              }}
-              title={`${rep.hazard_type || 'Incident'}: ${rep.municipality_name}`} 
-            />
-          </Marker>
-        ))}
+        {/* ── Step 3 & 4: Single GeoJSON Source + GPU Circle & Symbol Layers ── */}
+        <Source id="incident-reports-source" type="geojson" data={geojsonData} cluster={false}>
+          <Layer {...pinCircleLayer} />
+          <Layer {...pinLabelLayer} />
+        </Source>
       </Map>
 
       {/* ── Floating Stats Overlay (Bottom-Right) ── */}
@@ -214,7 +284,7 @@ export default function ReportMapTracker() {
           <div className="flex items-center justify-between text-sm font-semibold">
             <span className="text-gray-600 text-xs">Mapped Reports:</span>
             <span className="bg-rose-950/10 text-rose-900 font-bold px-2.5 py-0.5 rounded-full text-xs">
-              {validMarkers.length}
+              {mappedCount}
             </span>
           </div>
           <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-gray-100 text-[11px] font-medium text-gray-500">
