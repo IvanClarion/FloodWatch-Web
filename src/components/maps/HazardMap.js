@@ -2,15 +2,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Map, { Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
-import { Waves, Mountain, Compass } from 'lucide-react';
+import { Waves, Mountain, Compass, Satellite, Building } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import HazardMapToogleButton from '../monitoring/HazardMapToogleButton';
 
 export default function HazardMap() {
   const [activeHazard, setActiveHazard] = useState('flood'); // 'flood' | 'landslide'
+  const [isSatellite, setIsSatellite] = useState(false);
   const mapRef = useRef(null);
 
-  const mapStyle = process.env.NEXT_PUBLIC_MAPBOX_STYLE;
+  const defaultMapStyle = process.env.NEXT_PUBLIC_MAPBOX_STYLE || "mapbox://styles/apex-yoshi/cmp0s3wq700bg01sx2y9i69pw";
+  const satelliteMapStyle = "mapbox://styles/mapbox/satellite-streets-v12";
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const landslideTileset = process.env.NEXT_PUBLIC_LANDSLIDE_TILESET;
   const floodTileset = process.env.NEXT_PUBLIC_FLOOD_TILESET;
@@ -66,7 +68,7 @@ export default function HazardMap() {
     } catch (err) {
       // Ignore if layout property doesn't exist
     }
-  }, [activeHazard]);
+  }, [activeHazard, isSatellite]);
 
   return (
     <div className="relative w-full h-[calc(100vh-140px)] min-h-[550px] rounded-3xl overflow-hidden border border-gray-200 shadow-xl bg-gray-900 group">
@@ -77,7 +79,7 @@ export default function HazardMap() {
         onMove={evt => setViewState(evt.viewState)}
         onSourceData={handleSourceData}
         style={{ width: '100%', height: '100%' }}
-        mapStyle={mapStyle}
+        mapStyle={isSatellite ? satelliteMapStyle : defaultMapStyle}
         mapboxAccessToken={mapboxToken}
       >
         <NavigationControl position="top-right" />
@@ -107,7 +109,7 @@ export default function HazardMap() {
                     '#1D4ED8'
                   ]
                 ],
-                'fill-opacity': 0.65
+                'fill-opacity': isSatellite ? 0.55 : 0.65
               }}
             />
             <Layer
@@ -119,9 +121,9 @@ export default function HazardMap() {
                 visibility: activeHazard === 'flood' ? 'visible' : 'none'
               }}
               paint={{
-                'line-color': '#1E40AF',
-                'line-width': 1.5,
-                'line-opacity': 0.8
+                'line-color': isSatellite ? '#60A5FA' : '#1E40AF',
+                'line-width': isSatellite ? 2 : 1.5,
+                'line-opacity': 0.9
               }}
             />
           </Source>
@@ -152,7 +154,7 @@ export default function HazardMap() {
                     '#DC2626'
                   ]
                 ],
-                'fill-opacity': 0.65
+                'fill-opacity': isSatellite ? 0.55 : 0.65
               }}
             />
             <Layer
@@ -164,9 +166,9 @@ export default function HazardMap() {
                 visibility: activeHazard === 'landslide' ? 'visible' : 'none'
               }}
               paint={{
-                'line-color': '#991B1B',
-                'line-width': 1.5,
-                'line-opacity': 0.8
+                'line-color': isSatellite ? '#F87171' : '#991B1B',
+                'line-width': isSatellite ? 2 : 1.5,
+                'line-opacity': 0.9
               }}
             />
           </Source>
@@ -174,15 +176,30 @@ export default function HazardMap() {
       </Map>
 
       {/* Floating Header Toggle Overlay */}
-      <div className="absolute top-4 left-4 z-20 flex flex-col sm:flex-row items-start sm:items-center gap-3 max-w-[calc(100%-80px)]">
+      <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-2 max-w-[calc(100%-80px)]">
         <HazardMapToogleButton
           activeHazard={activeHazard}
           onHazardChange={setActiveHazard}
         />
+
+        {/* Satellite Feature Mode Toggle */}
+        <button
+          type="button"
+          onClick={() => setIsSatellite((prev) => !prev)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md backdrop-blur-md cursor-pointer border ${
+            isSatellite
+              ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/25 ring-2 ring-blue-400/50'
+              : 'bg-white/95 text-gray-700 hover:bg-white border-gray-200/80 hover:text-gray-900'
+          }`}
+          title="Toggle high-resolution satellite imagery to inspect affected structures and residential areas"
+        >
+          <Satellite className={`size-4 ${isSatellite ? 'text-white animate-pulse' : 'text-primary'}`} />
+          <span>{isSatellite ? 'Satellite Mode ON' : 'Satellite View'}</span>
+        </button>
       </div>
 
       {/* Floating Info Legend Card (Bottom-Left) */}
-      <div className="absolute bottom-4 left-4 z-20 max-w-xs w-full bg-white/90 backdrop-blur-xl border border-gray-200/80 rounded-2xl p-4 shadow-xl grid gap-3">
+      <div className="absolute bottom-4 left-4 z-20 max-w-xs w-full bg-white/95 backdrop-blur-xl border border-gray-200/80 rounded-2xl p-4 shadow-xl grid gap-3">
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex items-center gap-2">
             {activeHazard === 'flood' ? (
@@ -252,11 +269,23 @@ export default function HazardMap() {
           )}
         </div>
 
+        {/* Structure Exposure Banner when Satellite Mode is Active */}
+        {isSatellite && (
+          <div className="p-2.5 bg-blue-50/90 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 flex items-start gap-2 shadow-xs">
+            <Building className="size-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Residential Exposure Active:</span> Zoom in to view individual rooftops, houses, and settlements under the colored risk zones.
+            </div>
+          </div>
+        )}
+
         <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500 font-medium">
           <span className="flex items-center gap-1">
             <Compass className="size-3 text-primary" /> Cebu Province GIS
           </span>
-          <span className="text-primary font-bold">Live Layer Active</span>
+          <span className="text-primary font-bold">
+            {isSatellite ? 'Satellite + Risk' : 'Live Layer Active'}
+          </span>
         </div>
       </div>
     </div>
