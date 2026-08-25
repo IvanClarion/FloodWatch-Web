@@ -161,6 +161,13 @@ export default function AirQualityMap() {
         });
 
         setAirData(mergedData);
+
+        // Keep selected municipality popup details updated in real-time
+        setSelectedMuni((prev) => {
+          if (!prev) return null;
+          const updated = mergedData.find((m) => String(m.municipality_id) === String(prev.municipality_id));
+          return updated || prev;
+        });
       } catch (err) {
         console.error("Error fetching AirQualityMap data:", err);
       }
@@ -168,33 +175,39 @@ export default function AirQualityMap() {
 
     fetchData();
 
-    // Realtime: Subscribe to air_quality & weather_telemetry inserts
-    const airChannel = supabase
-      .channel('realtime-air-quality-map')
+    // Realtime: Listen to ALL events (INSERT, UPDATE, DELETE) across telemetry tables
+    const channelId = `realtime-air-quality-map-${Date.now()}`;
+    const realtimeChannel = supabase
+      .channel(channelId)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'air_quality' },
-        (payload) => {
-          setAirData((cur) =>
-            cur.map((muni) =>
-              muni.municipality_id === payload.new.municipality_id
-                ? {
-                  ...muni,
-                  aqi: payload.new.aqi,
-                  pm2_5: payload.new.pm2_5,
-                  pm10: payload.new.pm10,
-                  air_quality_status: payload.new.status,
-                  air_recorded_at: payload.new.recorded_at,
-                }
-                : muni
-            )
-          );
+        { event: '*', schema: 'public', table: 'air_quality' },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'weather_telemetry' },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'municipality_or_city' },
+        () => {
+          fetchData();
         }
       )
       .subscribe();
 
+    // 30-second heartbeat auto-sync fallback
+    const interval = setInterval(fetchData, 30000);
+
     return () => {
-      supabase.removeChannel(airChannel);
+      clearInterval(interval);
+      supabase.removeChannel(realtimeChannel);
     };
   }, []);
 

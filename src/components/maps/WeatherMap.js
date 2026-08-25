@@ -6,6 +6,8 @@ import { Thermometer, Tornado, Wind, CloudRain, Cloud, CheckCircle2, AlertTriang
 import 'mapbox-gl/dist/mapbox-gl.css';
 import MapToggleSwitch from './MapToggleSwitch';
 
+import { supabase } from '@/supabase/util/supabase';
+
 // Weather & Cyclone Tracking layers
 const WEATHER_LAYERS = [
   { op: 'temp_new', label: 'Temperature', Icon: Thermometer },
@@ -79,6 +81,27 @@ export default function WeatherMap({ activeTab: externalTab, onTabChange: extern
 
   useEffect(() => {
     fetchLiveCyclones();
+
+    // Auto-poll live cyclone tracking feeds every 60 seconds
+    const interval = setInterval(fetchLiveCyclones, 60000);
+
+    // Supabase Realtime subscription for weather_telemetry changes
+    const channelId = `weather-map-telemetry-${Date.now()}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'weather_telemetry' },
+        () => {
+          setLastUpdated(new Date().toLocaleTimeString());
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
@@ -127,9 +150,19 @@ export default function WeatherMap({ activeTab: externalTab, onTabChange: extern
             </div>
           ) : cyclones.length === 0 ? (
             <div>
-              <div className="flex items-center gap-2 text-emerald-700 font-extrabold text-sm border-b border-gray-100 pb-2 mb-2">
-                <ShieldCheck className="size-5 shrink-0 text-emerald-600" />
-                <span>NO ACTIVE TYPHOON IN PAR</span>
+              <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-2">
+                <div className="flex items-center gap-2 text-emerald-700 font-extrabold text-sm">
+                  <ShieldCheck className="size-5 shrink-0 text-emerald-600" />
+                  <span>NO ACTIVE TYPHOON IN PAR</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchLiveCyclones}
+                  className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                  title="Refresh cyclone feeds"
+                >
+                  <RefreshCw className="size-3.5" />
+                </button>
               </div>
               <p className="text-xs text-gray-700 font-medium leading-relaxed">
                 Live meteorological verification confirms there are currently <strong>no active tropical cyclones or typhoons</strong> operating within the Philippine Area of Responsibility (PAR) or Cebu sector.
@@ -141,9 +174,19 @@ export default function WeatherMap({ activeTab: externalTab, onTabChange: extern
             </div>
           ) : (
             <div>
-              <div className="flex items-center gap-2 text-red-600 font-extrabold text-sm border-b border-red-100 pb-2 mb-2">
-                <AlertTriangle className="size-5 shrink-0 animate-bounce" />
-                <span>ACTIVE CYCLONE DETECTED</span>
+              <div className="flex items-center justify-between border-b border-red-100 pb-2 mb-2">
+                <div className="flex items-center gap-2 text-red-600 font-extrabold text-sm">
+                  <AlertTriangle className="size-5 shrink-0 animate-bounce" />
+                  <span>ACTIVE CYCLONE DETECTED</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchLiveCyclones}
+                  className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                  title="Refresh cyclone feeds"
+                >
+                  <RefreshCw className="size-3.5" />
+                </button>
               </div>
               {cyclones.map((cyc) => (
                 <div key={cyc.id} className="mb-2">

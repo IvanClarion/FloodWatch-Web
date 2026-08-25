@@ -195,6 +195,13 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
         });
 
         setWeatherData(mergedData);
+
+        // Keep selected municipality popup details updated in real-time
+        setSelectedMuni((prev) => {
+          if (!prev) return null;
+          const updated = mergedData.find((m) => String(m.municipality_id) === String(prev.municipality_id));
+          return updated || prev;
+        });
       } catch (err) {
         console.error("Error fetching map telemetry data:", err);
       }
@@ -202,59 +209,39 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
 
     fetchData();
 
-    // ── 2. Realtime: weather_telemetry inserts ───────────────────────────────
-    const weatherChannel = supabase
-      .channel('live-weather')
+    // ── 2. Realtime: Subscribe to all changes on telemetry & municipalities ───
+    const channelId = `live-map-telemetry-${Date.now()}`;
+    const liveChannel = supabase
+      .channel(channelId)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'weather_telemetry' },
-        (payload) => {
-          setWeatherData((cur) =>
-            cur.map((muni) =>
-              muni.municipality_id === payload.new.municipality_id
-                ? {
-                  ...muni,
-                  temperature: payload.new.temperature,
-                  rainfall_mm: payload.new.rainfall_mm,
-                  wind_speed: payload.new.wind_speed,
-                  weather_condition: payload.new.weather_condition,
-                  fetched_at: payload.new.fetched_at,
-                }
-                : muni
-            )
-          );
+        { event: '*', schema: 'public', table: 'weather_telemetry' },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'air_quality' },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'municipality_or_city' },
+        () => {
+          fetchData();
         }
       )
       .subscribe();
 
-    // ── 3. Realtime: air_quality inserts ─────────────────────────────────────
-    const airChannel = supabase
-      .channel('live-air-quality')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'air_quality' },
-        (payload) => {
-          setWeatherData((cur) =>
-            cur.map((muni) =>
-              muni.municipality_id === payload.new.municipality_id
-                ? {
-                  ...muni,
-                  aqi: payload.new.aqi,
-                  pm2_5: payload.new.pm2_5,
-                  pm10: payload.new.pm10,
-                  air_quality_status: payload.new.status,
-                  air_recorded_at: payload.new.recorded_at,
-                }
-                : muni
-            )
-          );
-        }
-      )
-      .subscribe();
+    // 30-second heartbeat auto-sync fallback
+    const interval = setInterval(fetchData, 30000);
 
     return () => {
-      supabase.removeChannel(weatherChannel);
-      supabase.removeChannel(airChannel);
+      clearInterval(interval);
+      supabase.removeChannel(liveChannel);
     };
   }, []);
 
