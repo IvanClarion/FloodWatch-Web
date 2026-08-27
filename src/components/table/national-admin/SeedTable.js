@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ChevronRight, 
   X, 
@@ -13,7 +13,11 @@ import {
   Loader2,
   Compass,
   Crosshair,
-  Trash2
+  Trash2,
+  Layers,
+  Sparkles,
+  ShieldCheck,
+  Maximize2
 } from "lucide-react"
 import TableHeader from "../TableHeader"
 import Table from "../Table"
@@ -35,8 +39,199 @@ import SearchInput from "@/components/forms/SearchInput"
 import DeleteSeedAreaModal from "@/components/Seeding/DeleteSeedAreaModal"
 import { supabase } from "@/supabase/util/supabase"
 
-import Map, { Marker, NavigationControl } from 'react-map-gl/mapbox';
+import Map, { Marker, Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+
+// ─── PostGIS WKB (Well-Known Binary) Parser in Pure JS ──────────────────────
+function parseWkbHex(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+  const cleanHex = hex.trim();
+  if (!/^[0-9a-fA-F]+$/.test(cleanHex)) return null;
+
+  try {
+    const bytes = new Uint8Array(cleanHex.length / 2);
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+    }
+    const view = new DataView(bytes.buffer);
+    let offset = 0;
+
+    const byteOrder = view.getUint8(offset);
+    offset += 1;
+    const littleEndian = byteOrder === 1;
+
+    const rawGeomType = view.getUint32(offset, littleEndian);
+    offset += 4;
+
+    const hasSrid = (rawGeomType & 0x20000000) !== 0;
+    const type = rawGeomType & 0xFF; // 1 = Point, 3 = Polygon, 6 = MultiPolygon
+
+    if (hasSrid) {
+      offset += 4; // Skip 4-byte SRID
+    }
+
+    if (type === 1) { // Point
+      const x = view.getFloat64(offset, littleEndian);
+      offset += 8;
+      const y = view.getFloat64(offset, littleEndian);
+      offset += 8;
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [x, y] }
+      };
+    }
+
+    if (type === 3) { // Polygon
+      const numRings = view.getUint32(offset, littleEndian);
+      offset += 4;
+      const coordinates = [];
+
+      for (let r = 0; r < numRings; r++) {
+        const numPoints = view.getUint32(offset, littleEndian);
+        offset += 4;
+        const ring = [];
+        for (let p = 0; p < numPoints; p++) {
+          const x = view.getFloat64(offset, littleEndian);
+          offset += 8;
+          const y = view.getFloat64(offset, littleEndian);
+          offset += 8;
+          ring.push([x, y]);
+        }
+        coordinates.push(ring);
+      }
+
+      return {
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates }
+      };
+    }
+
+    if (type === 6) { // MultiPolygon
+      const numPolys = view.getUint32(offset, littleEndian);
+      offset += 4;
+      const coordinates = [];
+
+      for (let i = 0; i < numPolys; i++) {
+        offset += 1; // sub byte-order
+        offset += 4; // sub type
+        const numRings = view.getUint32(offset, littleEndian);
+        offset += 4;
+        const polyCoords = [];
+
+        for (let r = 0; r < numRings; r++) {
+          const numPoints = view.getUint32(offset, littleEndian);
+          offset += 4;
+          const ring = [];
+          for (let p = 0; p < numPoints; p++) {
+            const x = view.getFloat64(offset, littleEndian);
+            offset += 8;
+            const y = view.getFloat64(offset, littleEndian);
+            offset += 8;
+            ring.push([x, y]);
+          }
+          polyCoords.push(ring);
+        }
+        coordinates.push(polyCoords);
+      }
+
+      return {
+        type: 'Feature',
+        geometry: { type: 'MultiPolygon', coordinates }
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("Could not decode WKB binary geofence:", err);
+    return null;
+  }
+}
+
+// Helper: Convert WKT Polygon string to GeoJSON Feature
+function parseWktToGeoJson(wkt) {
+  if (!wkt || typeof wkt !== 'string') return null;
+  const str = wkt.trim().toUpperCase();
+
+  if (str.startsWith('POLYGON')) {
+    const match = str.match(/\(\(\s*(.*?)\s*\)\)/);
+    if (match && match[1]) {
+      const coords = match[1].split(',').map(pair => {
+        const [x, y] = pair.trim().split(/\s+/).map(Number);
+        return [x, y];
+      }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
+
+      if (coords.length >= 4) {
+        return {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [coords] }
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+// Helper: Generate a fallback bounding polygon in WKT and GeoJSON format
+function createGeofence(lng, lat, delta = 0.04) {
+  const minLng = Number((lng - delta).toFixed(6));
+  const maxLng = Number((lng + delta).toFixed(6));
+  const minLat = Number((lat - delta).toFixed(6));
+  const maxLat = Number((lat + delta).toFixed(6));
+
+  const wkt = `POLYGON((${minLng} ${minLat}, ${maxLng} ${minLat}, ${maxLng} ${maxLat}, ${minLng} ${maxLat}, ${minLng} ${minLat}))`;
+  
+  const geojson = {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [minLng, minLat],
+        [maxLng, minLat],
+        [maxLng, maxLat],
+        [minLng, maxLat],
+        [minLng, minLat]
+      ]]
+    }
+  };
+
+  return { wkt, geojson };
+}
+
+// Master boundary to GeoJSON converter for Mapbox
+function parseBoundaryToGeoJson(boundary, fallbackLng, fallbackLat, radiusKm = 5) {
+  if (!boundary) {
+    return createGeofence(fallbackLng, fallbackLat, radiusKm * 0.009).geojson;
+  }
+
+  // 1. If already GeoJSON object
+  if (typeof boundary === 'object' && boundary.type) {
+    return boundary.type === 'Feature' ? boundary : { type: 'Feature', geometry: boundary };
+  }
+
+  // 2. If JSON string
+  if (typeof boundary === 'string' && (boundary.startsWith('{') || boundary.startsWith('['))) {
+    try {
+      const parsed = JSON.parse(boundary);
+      return parsed.type === 'Feature' ? parsed : { type: 'Feature', geometry: parsed };
+    } catch (_) {}
+  }
+
+  // 3. If PostGIS WKB Hex string (starts with 0103 or 0106)
+  if (typeof boundary === 'string' && /^[0-9a-fA-F]{16,}$/.test(boundary.trim())) {
+    const wkbResult = parseWkbHex(boundary);
+    if (wkbResult) return wkbResult;
+  }
+
+  // 4. If WKT string
+  if (typeof boundary === 'string' && (boundary.toUpperCase().startsWith('POLYGON') || boundary.toUpperCase().startsWith('MULTIPOLYGON'))) {
+    const wktResult = parseWktToGeoJson(boundary);
+    if (wktResult) return wktResult;
+  }
+
+  // Fallback
+  return createGeofence(fallbackLng, fallbackLat, radiusKm * 0.009).geojson;
+}
 
 function LazyRow({ row, onRowClick, scrollRoot }) {
   const [state, setState] = useState("hidden");
@@ -131,7 +326,7 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
     try {
       const { data: rawData } = await supabase
         .from('province')
-        .select('province_id, name, municipality_or_city(municipality_id, name, center_latitude, center_longitude, added_on, updated_at)')
+        .select('province_id, name, municipality_or_city(municipality_id, name, center_latitude, center_longitude, center_point, boundary_geofence, added_on, updated_at)')
         .order('name', { ascending: true });
 
       if (rawData) {
@@ -147,6 +342,8 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                 municipality: m.name,
                 latitude: m.center_latitude ?? 8.9475,
                 longitude: m.center_longitude ?? 125.5406,
+                center_point: m.center_point || `POINT(${(m.center_longitude ?? 125.5406).toFixed(6)} ${(m.center_latitude ?? 8.9475).toFixed(6)})`,
+                boundary_geofence: m.boundary_geofence || null,
                 added_on: m.added_on ? new Date(m.added_on).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : "N/A",
                 updated_at: m.updated_at ? new Date(m.updated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : "N/A"
               });
@@ -191,8 +388,12 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
   const [editForm, setEditForm] = useState({
     municipality: "",
     latitude: "8.9475",
-    longitude: "125.5406"
+    longitude: "125.5406",
+    center_point: "POINT(125.540600 8.947500)",
+    boundary_geofence: ""
   });
+
+  const [boundaryRadiusKm, setBoundaryRadiusKm] = useState(5);
 
   const [viewState, setViewState] = useState({
     latitude: 8.9475,
@@ -204,10 +405,15 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
     if (selectedRow) {
       const lat = parseFloat(selectedRow.latitude) || 8.9475;
       const lng = parseFloat(selectedRow.longitude) || 125.5406;
+      const defaultBoundary = selectedRow.boundary_geofence || createGeofence(lng, lat, 0.045).wkt;
+      const defaultCenterPoint = selectedRow.center_point || `POINT(${lng.toFixed(6)} ${lat.toFixed(6)})`;
+
       setEditForm({
         municipality: selectedRow.municipality || "",
         latitude: lat.toString(),
-        longitude: lng.toString()
+        longitude: lng.toString(),
+        center_point: defaultCenterPoint,
+        boundary_geofence: defaultBoundary
       });
       setViewState({
         latitude: lat,
@@ -220,8 +426,15 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
 
   const handleLatChange = (val) => {
     const cleanVal = val.replace(/[^0-9.-]/g, "");
-    setEditForm(prev => ({ ...prev, latitude: cleanVal }));
     const parsedLat = parseFloat(cleanVal);
+    const lngNum = parseFloat(editForm.longitude) || 125.5406;
+    
+    setEditForm(prev => ({
+      ...prev,
+      latitude: cleanVal,
+      center_point: `POINT(${lngNum.toFixed(6)} ${(!isNaN(parsedLat) ? parsedLat : 0).toFixed(6)})`
+    }));
+
     if (!isNaN(parsedLat) && parsedLat >= -90 && parsedLat <= 90) {
       setViewState(prev => ({ ...prev, latitude: parsedLat }));
     }
@@ -229,8 +442,15 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
 
   const handleLngChange = (val) => {
     const cleanVal = val.replace(/[^0-9.-]/g, "");
-    setEditForm(prev => ({ ...prev, longitude: cleanVal }));
     const parsedLng = parseFloat(cleanVal);
+    const latNum = parseFloat(editForm.latitude) || 8.9475;
+
+    setEditForm(prev => ({
+      ...prev,
+      longitude: cleanVal,
+      center_point: `POINT(${(!isNaN(parsedLng) ? parsedLng : 0).toFixed(6)} ${latNum.toFixed(6)})`
+    }));
+
     if (!isNaN(parsedLng) && parsedLng >= -180 && parsedLng <= 180) {
       setViewState(prev => ({ ...prev, longitude: parsedLng }));
     }
@@ -239,10 +459,15 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
   const handleMarkerDragEnd = (evt) => {
     const newLat = evt.lngLat.lat;
     const newLng = evt.lngLat.lng;
+    const delta = (boundaryRadiusKm * 0.009);
+    const { wkt } = createGeofence(newLng, newLat, delta);
+
     setEditForm(prev => ({
       ...prev,
       latitude: newLat.toFixed(6),
-      longitude: newLng.toFixed(6)
+      longitude: newLng.toFixed(6),
+      center_point: `POINT(${newLng.toFixed(6)} ${newLat.toFixed(6)})`,
+      boundary_geofence: wkt
     }));
     setViewState(prev => ({
       ...prev,
@@ -250,6 +475,26 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
       longitude: newLng
     }));
   };
+
+  const handleAutoGenerateGeofence = () => {
+    const latNum = parseFloat(editForm.latitude) || 8.9475;
+    const lngNum = parseFloat(editForm.longitude) || 125.5406;
+    const delta = (boundaryRadiusKm * 0.009);
+    const { wkt } = createGeofence(lngNum, latNum, delta);
+    setEditForm(prev => ({ ...prev, boundary_geofence: wkt }));
+  };
+
+  // Dynamically compute the exact GeoJSON boundary for Mapbox layer
+  const boundaryGeoJson = useMemo(() => {
+    const latNum = parseFloat(editForm.latitude) || 8.9475;
+    const lngNum = parseFloat(editForm.longitude) || 125.5406;
+    
+    const activeBoundary = isEditing 
+      ? editForm.boundary_geofence 
+      : (selectedRow?.boundary_geofence || editForm.boundary_geofence);
+
+    return parseBoundaryToGeoJson(activeBoundary, lngNum, latNum, boundaryRadiusKm);
+  }, [editForm.latitude, editForm.longitude, editForm.boundary_geofence, selectedRow?.boundary_geofence, isEditing, boundaryRadiusKm]);
 
   const handleSaveUpdate = async () => {
     if (!selectedRow?.municipality_id) {
@@ -274,7 +519,9 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
           municipality_id: selectedRow.municipality_id,
           name: editForm.municipality.trim(),
           latitude: latNum,
-          longitude: lngNum
+          longitude: lngNum,
+          center_point: editForm.center_point,
+          boundary_geofence: editForm.boundary_geofence
         })
       });
 
@@ -290,7 +537,15 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
       setTableRows(prevRows =>
         prevRows.map(row =>
           row.municipality_id === selectedRow.municipality_id
-            ? { ...row, municipality: editForm.municipality.trim(), latitude: latNum, longitude: lngNum, updated_at: updatedDate }
+            ? { 
+                ...row, 
+                municipality: editForm.municipality.trim(), 
+                latitude: latNum, 
+                longitude: lngNum, 
+                center_point: editForm.center_point,
+                boundary_geofence: editForm.boundary_geofence,
+                updated_at: updatedDate 
+              }
             : row
         ).sort((a, b) => (a.municipality || '').localeCompare(b.municipality || ''))
       );
@@ -300,6 +555,8 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
         municipality: editForm.municipality.trim(),
         latitude: latNum,
         longitude: lngNum,
+        center_point: editForm.center_point,
+        boundary_geofence: editForm.boundary_geofence,
         updated_at: updatedDate
       }));
 
@@ -384,6 +641,9 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
   const currentLat = parseFloat(editForm.latitude) || 8.9475;
   const currentLng = parseFloat(editForm.longitude) || 125.5406;
 
+  // Determine boundary type text description
+  const isPostgisBinary = typeof selectedRow?.boundary_geofence === 'string' && /^[0-9a-fA-F]{16,}$/.test(selectedRow.boundary_geofence.trim());
+
   return (
     <Table className="w-full min-w-0 overflow-hidden">
       {/* Table Header with Integrated 3s Debounced Search Bar */}
@@ -444,10 +704,10 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
           <div className="p-4 bg-white sticky top-0 flex justify-between items-center border-b border-gray-100 z-10">
             <div>
               <CardSubHeader className="text-lg text-primary">
-                {isEditing ? "Edit Location Coordinates" : (selectedRow.municipality !== "No municipalities added" ? selectedRow.municipality : selectedRow.province)}
+                {isEditing ? "Edit Location & Geofence" : (selectedRow.municipality !== "No municipalities added" ? selectedRow.municipality : selectedRow.province)}
               </CardSubHeader>
               <CardBasedText className="text-xs text-gray-400 font-medium mt-0.5">
-                Area Seeding & Location Details
+                Area Seeding & PostGIS Geofence Details
               </CardBasedText>
             </div>
             <button 
@@ -466,7 +726,7 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                 <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
                 <div>
                   <h4 className="font-bold text-sm text-gray-800">Seeded Area Record</h4>
-                  <p className="text-xs text-emerald-700 font-medium">Registered in National System</p>
+                  <p className="text-xs text-emerald-700 font-medium">PostGIS Boundary Decoded & Active</p>
                 </div>
               </div>
               <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold uppercase rounded-full">
@@ -479,16 +739,16 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
               <div className="flex items-center justify-between">
                 <div className="flex items-center font-semibold gap-2">
                   <Compass className="text-primary size-4" />
-                  <CardSubHeader>Visual Map Location</CardSubHeader>
+                  <CardSubHeader>Visual Geofence Map</CardSubHeader>
                 </div>
                 {isEditing && (
                   <span className="text-[11px] text-primary font-semibold flex items-center gap-1">
-                    <Crosshair className="size-3" /> Drag pin or edit inputs to move map
+                    <Crosshair className="size-3" /> Drag pin to reposition geofence
                   </span>
                 )}
               </div>
 
-              <div className="h-60 w-full rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative group">
+              <div className="h-64 w-full rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative group">
                 <Map
                   {...viewState}
                   onMove={evt => setViewState(evt.viewState)}
@@ -497,6 +757,29 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                   mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
                 >
                   <NavigationControl position="top-right" />
+
+                  {/* Render Boundary Geofence Polygon Layer (Decoded from boundary_geofence row) */}
+                  {boundaryGeoJson && (
+                    <Source id="modal-boundary-geofence" type="geojson" data={boundaryGeoJson}>
+                      <Layer
+                        id="modal-boundary-fill"
+                        type="fill"
+                        paint={{
+                          'fill-color': '#0035A9',
+                          'fill-opacity': 0.22
+                        }}
+                      />
+                      <Layer
+                        id="modal-boundary-line"
+                        type="line"
+                        paint={{
+                          'line-color': '#0035A9',
+                          'line-width': 2.5,
+                          'line-dasharray': [2, 2]
+                        }}
+                      />
+                    </Source>
+                  )}
                   
                   <Marker
                     latitude={currentLat}
@@ -515,7 +798,7 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                 </Map>
 
                 {/* Coordinate Badge Overlay */}
-                <div className="absolute bottom-2 left-2 z-10 bg-black/70 backdrop-blur-md text-white text-[11px] font-mono px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2">
+                <div className="absolute bottom-2 left-2 z-10 bg-black/75 backdrop-blur-md text-white text-[11px] font-mono px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2">
                   <span className="text-emerald-400 font-bold">Lat:</span> {currentLat.toFixed(6)}
                   <span className="text-emerald-400 font-bold">Lng:</span> {currentLng.toFixed(6)}
                 </div>
@@ -557,6 +840,58 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                     />
                   </div>
                 </div>
+
+                {/* ── PostGIS Geography Inputs in Edit Mode ── */}
+                <div className="grid gap-3 p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 mt-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
+                      <Layers className="size-4 text-primary" />
+                      <span>PostGIS Geography Specifications</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateGeofence}
+                      className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="size-3" /> Auto-Generate
+                    </button>
+                  </div>
+
+                  <div className="grid gap-1">
+                    <label className="text-[11px] font-semibold text-gray-700">Center Point (WKT Point)</label>
+                    <input
+                      type="text"
+                      value={editForm.center_point}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, center_point: e.target.value }))}
+                      className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-mono text-gray-800 focus:outline-primary"
+                    />
+                  </div>
+
+                  <div className="grid gap-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-gray-700">Boundary Geofence (WKT Polygon / PostGIS)</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500">Radius:</span>
+                        <select
+                          value={boundaryRadiusKm}
+                          onChange={(e) => setBoundaryRadiusKm(Number(e.target.value))}
+                          className="bg-white border border-gray-200 rounded text-[11px] px-1.5 py-0.5 text-gray-700 font-bold"
+                        >
+                          <option value={3}>3 km</option>
+                          <option value={5}>5 km</option>
+                          <option value={10}>10 km</option>
+                          <option value={15}>15 km</option>
+                        </select>
+                      </div>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={editForm.boundary_geofence}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, boundary_geofence: e.target.value }))}
+                      className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-[11px] font-mono text-gray-800 focus:outline-primary resize-none"
+                    />
+                  </div>
+                </div>
               </div>
             ) : (
               /* View Details Mode */
@@ -583,23 +918,54 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                   </div>
                 </div>
 
-                {/* Coordinates Details Card */}
-                <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50/60 rounded-xl border border-gray-100 text-xs">
-                  <div>
-                    <span className="text-gray-400 font-medium flex items-center gap-1.5">
-                      <Compass className="size-3.5 text-primary" /> Latitude
-                    </span>
-                    <span className="font-bold text-gray-800 font-mono block mt-0.5">
-                      {currentLat.toFixed(6)}
+                {/* Coordinates & PostGIS Specs Card */}
+                <div className="grid gap-2.5 p-3.5 bg-blue-50/40 rounded-xl border border-blue-100 text-xs">
+                  <div className="flex items-center justify-between font-bold text-blue-900 text-xs mb-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="size-4 text-primary" />
+                      <span>PostGIS Georeferenced Coordinates</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {isPostgisBinary ? 'PostGIS WKB Binary' : 'WKT Polygon'}
                     </span>
                   </div>
 
-                  <div>
-                    <span className="text-gray-400 font-medium flex items-center gap-1.5">
-                      <Compass className="size-3.5 text-primary" /> Longitude
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-gray-500 font-medium flex items-center gap-1">
+                        <Compass className="size-3.5 text-primary" /> Latitude
+                      </span>
+                      <span className="font-bold text-gray-800 font-mono block mt-0.5">
+                        {currentLat.toFixed(6)}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 font-medium flex items-center gap-1">
+                        <Compass className="size-3.5 text-primary" /> Longitude
+                      </span>
+                      <span className="font-bold text-gray-800 font-mono block mt-0.5">
+                        {currentLng.toFixed(6)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Center Point Display */}
+                  <div className="pt-2 border-t border-blue-100">
+                    <span className="text-gray-500 font-semibold block text-[11px]">Center Point (PostGIS Point):</span>
+                    <span className="font-mono text-[11px] text-primary font-bold break-all">
+                      {editForm.center_point || `POINT(${currentLng.toFixed(6)} ${currentLat.toFixed(6)})`}
                     </span>
-                    <span className="font-bold text-gray-800 font-mono block mt-0.5">
-                      {currentLng.toFixed(6)}
+                  </div>
+
+                  {/* Boundary Geofence Display */}
+                  <div className="pt-1.5">
+                    <span className="text-gray-500 font-semibold block text-[11px]">Boundary Geofence Row Data:</span>
+                    <span 
+                      className="font-mono text-[10px] text-gray-600 font-medium break-all block max-h-16 overflow-y-auto bg-white/70 p-1.5 rounded border border-blue-100"
+                      title={String(selectedRow?.boundary_geofence || editForm.boundary_geofence)}
+                    >
+                      {String(selectedRow?.boundary_geofence || editForm.boundary_geofence || 'Auto-generated 5km bounding polygon')}
                     </span>
                   </div>
                 </div>
@@ -654,7 +1020,7 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                     className="flex items-center gap-2"
                   >
                     {isUpdating ? <Loader2 className="size-4 animate-spin"/> : null}
-                    {isUpdating ? "Saving..." : "Save Location"}
+                    {isUpdating ? "Saving..." : "Save Location & Geofence"}
                   </PrimaryButton>
                 </div>
               </>
@@ -672,7 +1038,7 @@ export default function SeedTable({ data = [], title = "Area Seeding Table", onR
                   className="flex items-center gap-1.5 text-xs"
                 >
                   <Pencil className="size-3.5" />
-                  <span>Edit Location & Coordinates</span>
+                  <span>Edit Location & Geofence</span>
                 </PrimaryButton>
               </>
             )}

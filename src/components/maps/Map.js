@@ -76,6 +76,16 @@ const getAqiMeta = (aqi) => {
   return AQI_LEVELS.find((l) => aqi <= l.max) ?? AQI_LEVELS[AQI_LEVELS.length - 1];
 };
 
+// ─── Rainfall category helper (PAGASA Thresholds) ───────────────────────────
+const getRainfallCategory = (mm) => {
+  if (mm == null || mm <= 0) return 'No Rain';
+  if (mm < 2.5) return 'Light Rain';
+  if (mm < 7.5) return 'Moderate Rain';
+  if (mm < 15.0) return 'Heavy Rain';
+  if (mm <= 30.0) return 'Intense Rain';
+  return 'Torrential Rain';
+};
+
 // ─── Rainfall severity (0-3) ─────────────────────────────────────────────────
 const rainSeverity = (mm) => {
   if (mm >= 30) return 3; // red
@@ -181,6 +191,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
             // Weather telemetry from weather_telemetry
             temperature: latestWeather.temperature ?? null,
             rainfall_mm: latestWeather.rainfall_mm ?? null,
+            rainfall_category: latestWeather.rainfall_category || (latestWeather.rainfall_mm != null ? getRainfallCategory(latestWeather.rainfall_mm) : null),
             wind_speed: latestWeather.wind_speed ?? null,
             weather_condition: latestWeather.weather_condition ?? null,
             fetched_at: latestWeather.fetched_at ?? null,
@@ -384,6 +395,8 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
                 <CardSubHeader>
                   Weather
                 </CardSubHeader>
+
+                {/* Weather condition badge */}
                 {selectedMuni.weather_condition && (
                   <div className={`flex items-center p-2 rounded-lg gap-2 text-sm ${getSeverityBgClass(rainSeverity(selectedMuni.rainfall_mm))}`}>
                     <span className={getSeverityIconClass(rainSeverity(selectedMuni.rainfall_mm))}>
@@ -392,6 +405,41 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
                     <span className="text-gray-700 font-medium">{selectedMuni.weather_condition}</span>
                   </div>
                 )}
+
+                {/* Rainfall Category Status Badge */}
+                {selectedMuni.rainfall_category && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    background: (rainSeverity(selectedMuni.rainfall_mm) >= 3 ? '#ef4444' :
+                                 rainSeverity(selectedMuni.rainfall_mm) === 2 ? '#f97316' :
+                                 rainSeverity(selectedMuni.rainfall_mm) === 1 ? '#eab308' :
+                                 '#3b82f6') + '14',
+                    border: `1px solid ${
+                      rainSeverity(selectedMuni.rainfall_mm) >= 3 ? '#ef4444' :
+                      rainSeverity(selectedMuni.rainfall_mm) === 2 ? '#f97316' :
+                      rainSeverity(selectedMuni.rainfall_mm) === 1 ? '#eab308' :
+                      '#3b82f6'
+                    }33`,
+                    marginBottom: '2px',
+                  }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>Category</span>
+                    <span style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: rainSeverity(selectedMuni.rainfall_mm) >= 3 ? '#dc2626' :
+                             rainSeverity(selectedMuni.rainfall_mm) === 2 ? '#ea580c' :
+                             rainSeverity(selectedMuni.rainfall_mm) === 1 ? '#ca8a04' :
+                             '#2563eb',
+                    }}>
+                      {selectedMuni.rainfall_category}
+                    </span>
+                  </div>
+                )}
+
                 <Row icon={<Thermometer className='text-gray-600 size-5' />} label="Temperature" value={selectedMuni.temperature} unit=" °C" />
                 <Row icon={<CloudRain className='text-gray-600 size-5' />} label="Rainfall" value={selectedMuni.rainfall_mm} unit=" mm/h" />
                 <Row icon={<Wind className='text-gray-600 size-5' />} label="Wind Speed" value={selectedMuni.wind_speed} unit=" m/s" />

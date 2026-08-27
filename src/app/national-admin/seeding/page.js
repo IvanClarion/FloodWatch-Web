@@ -17,7 +17,7 @@ export default async function page(props) {
 
   const { data: rawData, error: fetchErr } = await supabase
     .from('province')
-    .select('province_id, name, municipality_or_city(municipality_id, name, center_latitude, center_longitude, added_on, updated_at)')
+    .select('province_id, name, municipality_or_city(municipality_id, name, center_latitude, center_longitude, center_point, boundary_geofence, added_on, updated_at)')
     .order('name', { ascending: true });
 
   if (fetchErr) {
@@ -37,6 +37,8 @@ export default async function page(props) {
             municipality: m.name,
             latitude: m.center_latitude ?? 8.9475,
             longitude: m.center_longitude ?? 125.5406,
+            center_point: m.center_point ?? null,
+            boundary_geofence: m.boundary_geofence ?? null,
             added_on: m.added_on ? new Date(m.added_on).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : "N/A",
             updated_at: m.updated_at ? new Date(m.updated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : "N/A"
           });
@@ -49,6 +51,8 @@ export default async function page(props) {
           municipality: "No municipalities added",
           latitude: 8.9475,
           longitude: 125.5406,
+          center_point: null,
+          boundary_geofence: null,
           added_on: "N/A",
           updated_at: "N/A"
         });

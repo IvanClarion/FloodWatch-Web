@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import SideModal from "../Modal/SideModal"
 import CardSubHeader from "../cards/CardSubHeader"
 import CardBasedText from "../cards/CardBasedText"
@@ -15,15 +15,43 @@ import {
   ChevronDown, 
   Check, 
   Search, 
-  Plus, 
-  Crosshair 
+  Crosshair,
+  Layers,
+  Sparkles,
+  ShieldAlert
 } from "lucide-react"
 import { supabase } from '@/supabase/util/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-import Map, { Marker, NavigationControl } from 'react-map-gl/mapbox'
+import Map, { Marker, Source, Layer, NavigationControl } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
+
+// Helper: Generate a bounding polygon in WKT and GeoJSON format
+function createGeofence(lng, lat, delta = 0.04) {
+  const minLng = Number((lng - delta).toFixed(6));
+  const maxLng = Number((lng + delta).toFixed(6));
+  const minLat = Number((lat - delta).toFixed(6));
+  const maxLat = Number((lat + delta).toFixed(6));
+
+  const wkt = `POLYGON((${minLng} ${minLat}, ${maxLng} ${minLat}, ${maxLng} ${maxLat}, ${minLng} ${maxLat}, ${minLng} ${minLat}))`;
+  
+  const geojson = {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [minLng, minLat],
+        [maxLng, minLat],
+        [maxLng, maxLat],
+        [minLng, maxLat],
+        [minLng, minLat]
+      ]]
+    }
+  };
+
+  return { wkt, geojson };
+}
 
 export default function AddAreaModal() {
   const router = useRouter()
@@ -40,6 +68,11 @@ export default function AddAreaModal() {
   const [latitude, setLatitude] = useState("8.9475")
   const [longitude, setLongitude] = useState("125.5406")
 
+  // PostGIS Geography fields
+  const [centerPoint, setCenterPoint] = useState("POINT(125.540600 8.947500)")
+  const [boundaryGeofence, setBoundaryGeofence] = useState("")
+  const [boundaryRadiusKm, setBoundaryRadiusKm] = useState(5) // approx 5km radius (0.045 deg)
+
   const [viewState, setViewState] = useState({
     latitude: 8.9475,
     longitude: 125.5406,
@@ -47,6 +80,16 @@ export default function AddAreaModal() {
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Initialize and auto-sync boundary geofence on coordinates change
+  useEffect(() => {
+    const latNum = parseFloat(latitude) || 8.9475;
+    const lngNum = parseFloat(longitude) || 125.5406;
+    const delta = (boundaryRadiusKm * 0.009); // 1km approx 0.009 degrees
+    const { wkt } = createGeofence(lngNum, latNum, delta);
+    setCenterPoint(`POINT(${lngNum.toFixed(6)} ${latNum.toFixed(6)})`);
+    setBoundaryGeofence(wkt);
+  }, [latitude, longitude, boundaryRadiusKm]);
 
   useEffect(() => {
     const fetchProvinces = async () => {
@@ -90,6 +133,59 @@ export default function AddAreaModal() {
     }))
   }
 
+  const handleCenterPointChange = (val) => {
+    setCenterPoint(val);
+    // Try to parse POINT(lng lat)
+    const match = val.match(/POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)/i);
+    if (match) {
+      const parsedLng = parseFloat(match[1]);
+      const parsedLat = parseFloat(match[2]);
+      if (!isNaN(parsedLng) && !isNaN(parsedLat)) {
+        setLongitude(parsedLng.toFixed(6));
+        setLatitude(parsedLat.toFixed(6));
+        setViewState(prev => ({ ...prev, latitude: parsedLat, longitude: parsedLng }));
+      }
+    }
+  };
+
+  const handleAutoGenerateGeofence = () => {
+    const latNum = parseFloat(latitude) || 8.9475;
+    const lngNum = parseFloat(longitude) || 125.5406;
+    const delta = (boundaryRadiusKm * 0.009);
+    const { wkt } = createGeofence(lngNum, latNum, delta);
+    setBoundaryGeofence(wkt);
+  };
+
+  // Convert WKT boundary to GeoJSON for Mapbox visual rendering
+  const boundaryGeoJson = useMemo(() => {
+    const latNum = parseFloat(latitude) || 8.9475;
+    const lngNum = parseFloat(longitude) || 125.5406;
+    const delta = (boundaryRadiusKm * 0.009);
+    
+    // Try parsing user's boundaryGeofence string if WKT
+    if (boundaryGeofence && boundaryGeofence.startsWith('POLYGON')) {
+      const match = boundaryGeofence.match(/\(\(\s*(.*?)\s*\)\)/);
+      if (match && match[1]) {
+        const pairs = match[1].split(',').map(pair => {
+          const [x, y] = pair.trim().split(/\s+/).map(Number);
+          return [x, y];
+        }).filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
+
+        if (pairs.length >= 4) {
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [pairs]
+            }
+          };
+        }
+      }
+    }
+
+    return createGeofence(lngNum, latNum, delta).geojson;
+  }, [latitude, longitude, boundaryRadiusKm, boundaryGeofence]);
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -109,37 +205,25 @@ export default function AddAreaModal() {
     setIsSubmitting(true)
 
     try {
-      let targetProvinceId = selectedProvinceId
-
-      if (isNewProvince || !targetProvinceId) {
-        if (!newProvinceName.trim()) {
-          alert("Please specify a province name.")
-          setIsSubmitting(false)
-          return
-        }
-
-        const { data: newProv, error: provErr } = await supabase
-          .from('province')
-          .insert({ name: newProvinceName.trim() })
-          .select('province_id')
-          .single()
-
-        if (provErr) throw provErr
-        targetProvinceId = newProv.province_id
-      }
-
-      const { error: muniErr } = await supabase
-        .from('municipality_or_city')
-        .insert({
-          province_id: targetProvinceId,
+      const res = await fetch('/api/seeding/add-area', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          province_id: selectedProvinceId,
+          new_province_name: newProvinceName,
+          is_new_province: isNewProvince,
           name: municipalityName.trim(),
-          center_latitude: latNum,
-          center_longitude: lngNum,
-          added_on: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          latitude: latNum,
+          longitude: lngNum,
+          center_point: centerPoint,
+          boundary_geofence: boundaryGeofence
         })
+      });
 
-      if (muniErr) throw muniErr
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Failed to add area record.');
+      }
 
       router.push('/national-admin/seeding')
       router.refresh()
@@ -166,7 +250,7 @@ export default function AddAreaModal() {
         <div>
           <CardSubHeader className="text-lg text-primary">Add New Seeding Area</CardSubHeader>
           <CardBasedText className="text-xs text-gray-400 font-medium mt-0.5">
-            Register a province or municipality with map coordinates
+            Register municipality with PostGIS center point & boundary geofence
           </CardBasedText>
         </div>
         <Link href="/national-admin/seeding" className="hover:bg-gray-100 p-1.5 rounded-full transition-colors cursor-pointer">
@@ -222,7 +306,6 @@ export default function AddAreaModal() {
               {/* Custom Styled Dropdown Popover */}
               {isDropdownOpen && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-gray-200 shadow-xl z-30 overflow-hidden max-h-60 flex flex-col">
-                  {/* Search Bar inside dropdown */}
                   <div className="p-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
                     <Search className="size-3.5 text-gray-400 shrink-0" />
                     <input
@@ -281,19 +364,19 @@ export default function AddAreaModal() {
           />
         </div>
 
-        {/* Interactive Mapbox Map for Coordinates */}
+        {/* Interactive Mapbox Map with Point Marker & Geofence Boundary */}
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center font-semibold gap-2">
               <Compass className="text-primary size-4" />
-              <CardSubHeader>Map Location Picker</CardSubHeader>
+              <CardSubHeader>Visual Geofence Map</CardSubHeader>
             </div>
             <span className="text-[11px] text-primary font-semibold flex items-center gap-1">
-              <Crosshair className="size-3" /> Drag pin or edit numbers to move map
+              <Crosshair className="size-3" /> Drag pin to reposition geofence
             </span>
           </div>
 
-          <div className="h-56 w-full rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative group">
+          <div className="h-60 w-full rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative group">
             <Map
               {...viewState}
               onMove={evt => setViewState(evt.viewState)}
@@ -302,6 +385,27 @@ export default function AddAreaModal() {
               mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
             >
               <NavigationControl position="top-right" />
+
+              {/* Render Boundary Geofence Polygon Layer */}
+              <Source id="boundary-geofence-source" type="geojson" data={boundaryGeoJson}>
+                <Layer
+                  id="boundary-geofence-fill"
+                  type="fill"
+                  paint={{
+                    'fill-color': '#0035A9',
+                    'fill-opacity': 0.18
+                  }}
+                />
+                <Layer
+                  id="boundary-geofence-line"
+                  type="line"
+                  paint={{
+                    'line-color': '#0035A9',
+                    'line-width': 2.5,
+                    'line-dasharray': [2, 2]
+                  }}
+                />
+              </Source>
               
               <Marker
                 latitude={currentLat}
@@ -360,6 +464,69 @@ export default function AddAreaModal() {
           </div>
         </div>
 
+        {/* ── PostGIS Geography Inputs (Center Point & Boundary Geofence) ── */}
+        <div className="grid gap-3 p-3.5 bg-blue-50/50 rounded-xl border border-blue-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
+              <Layers className="size-4 text-primary" />
+              <span>PostGIS Geography Specifications</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleAutoGenerateGeofence}
+              className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Sparkles className="size-3" /> Auto-Generate
+            </button>
+          </div>
+
+          {/* Center Point Input */}
+          <div className="grid gap-1">
+            <label className="text-[11px] font-semibold text-gray-700 flex items-center justify-between">
+              <span>Center Point (WKT Point)</span>
+              <span className="text-gray-400 font-mono text-[10px]">POINT(lng lat)</span>
+            </label>
+            <input
+              type="text"
+              value={centerPoint}
+              onChange={(e) => handleCenterPointChange(e.target.value)}
+              placeholder="POINT(125.540600 8.947500)"
+              className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-mono text-gray-800 focus:outline-primary"
+              required
+            />
+          </div>
+
+          {/* Boundary Geofence Input */}
+          <div className="grid gap-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-gray-700">
+                Boundary Geofence (WKT Polygon)
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500">Radius:</span>
+                <select
+                  value={boundaryRadiusKm}
+                  onChange={(e) => setBoundaryRadiusKm(Number(e.target.value))}
+                  className="bg-white border border-gray-200 rounded text-[11px] px-1.5 py-0.5 text-gray-700 font-bold"
+                >
+                  <option value={3}>3 km</option>
+                  <option value={5}>5 km</option>
+                  <option value={10}>10 km</option>
+                  <option value={15}>15 km</option>
+                </select>
+              </div>
+            </div>
+            <textarea
+              rows={2}
+              value={boundaryGeofence}
+              onChange={(e) => setBoundaryGeofence(e.target.value)}
+              placeholder="POLYGON((lng1 lat1, lng2 lat2, ...))"
+              className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-[11px] font-mono text-gray-800 focus:outline-primary resize-none"
+              required
+            />
+          </div>
+        </div>
+
         {/* Submit Footer */}
         <div className="pt-3 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
           <Link
@@ -370,7 +537,7 @@ export default function AddAreaModal() {
           </Link>
           <PrimaryButton type="submit" disabled={isSubmitting} className="flex items-center gap-2">
             {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-            {isSubmitting ? "Adding Area..." : "Register Area"}
+            {isSubmitting ? "Adding Area..." : "Register Area & Geofence"}
           </PrimaryButton>
         </div>
       </form>

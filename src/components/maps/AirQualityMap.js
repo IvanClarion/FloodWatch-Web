@@ -154,6 +154,7 @@ export default function AirQualityMap() {
             // Weather telemetry fields from weather_telemetry
             temperature: latestWeather.temperature ?? null,
             rainfall_mm: latestWeather.rainfall_mm ?? null,
+            rainfall_category: latestWeather.rainfall_category ?? null,
             wind_speed: latestWeather.wind_speed ?? null,
             weather_condition: latestWeather.weather_condition ?? null,
             fetched_at: latestWeather.fetched_at ?? null,
