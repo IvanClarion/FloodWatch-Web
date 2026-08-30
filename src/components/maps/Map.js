@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Map, { Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
-import { X, Thermometer, CloudRain, Wind, Cloud, Microscope, Waves, Leaf } from 'lucide-react';
+import { X, Thermometer, CloudRain, Wind, Cloud, Microscope, Waves, Leaf, Sun, Droplets, Filter, Maximize2 } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/supabase/util/supabase';
 import GeneralCard from '../cards/GeneralCard';
@@ -10,6 +10,8 @@ import CardHeader from '../cards/CardHeader';
 import CardSubHeader from '../cards/CardSubHeader';
 import MapToggleSwitch from './MapToggleSwitch';
 import WeatherMap from './WeatherMap';
+import SearchInput from '@/components/forms/SearchInput';
+import MapFilterDropdown from './MapFilterDropdown';
 
 // ─── Layer Style Definitions for GPU Canvas Rendering ──────────────────────
 const pinCircleLayer = {
@@ -148,7 +150,7 @@ const getAqiStatusBgClass = (status) => {
   return 'bg-gray-100';
 };
 
-export default function FloodWatchMap({ activeTab: externalTab, onTabChange: externalOnTabChange }) {
+export default function FloodWatchMap({ activeTab: externalTab, onTabChange: externalOnTabChange, isFullscreen = false }) {
   const [internalTab, setInternalTab] = useState('Risk Mapping');
   const activeTab = externalTab !== undefined ? externalTab : internalTab;
   const handleTabChange = externalOnTabChange || setInternalTab;
@@ -156,6 +158,8 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
   const [weatherData, setWeatherData] = useState([]);
   const [selectedMuni, setSelectedMuni] = useState(null);
   const [cursor, setCursor] = useState('auto');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('ALL');
 
   useEffect(() => {
     // ── 1. Fetch directly from main tables (municipality_or_city, weather_telemetry, air_quality) ──
@@ -190,6 +194,9 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
 
             // Weather telemetry from weather_telemetry
             temperature: latestWeather.temperature ?? null,
+            humidity: latestWeather.humidity ?? null,
+            heat_index: latestWeather.heat_index ?? null,
+            heat_index_category: latestWeather.heat_index_category ?? null,
             rainfall_mm: latestWeather.rainfall_mm ?? null,
             rainfall_category: latestWeather.rainfall_category || (latestWeather.rainfall_mm != null ? getRainfallCategory(latestWeather.rainfall_mm) : null),
             wind_speed: latestWeather.wind_speed ?? null,
@@ -262,9 +269,32 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     [124.50, 11.50],
   ];
 
+  // Filter dataset based on SearchInput and Risk level dropdown
+  const filteredWeatherData = useMemo(() => {
+    return weatherData.filter((item) => {
+      const name = item.name || item.municipality_name || '';
+      const matchSearch = searchQuery.trim() === '' || 
+        name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+
+      if (!matchSearch) return false;
+
+      if (filterCategory === 'ALL') return true;
+      const rSev = rainSeverity(item.rainfall_mm);
+      const aSev = aqiSeverity(item.aqi);
+      const severity = Math.max(rSev, aSev);
+
+      if (filterCategory === 'RED') return severity >= 3;
+      if (filterCategory === 'ORANGE') return severity === 2;
+      if (filterCategory === 'YELLOW') return severity === 1;
+      if (filterCategory === 'BLUE') return severity === 0;
+
+      return true;
+    });
+  }, [weatherData, searchQuery, filterCategory]);
+
   // ── Step 1: Memoized GeoJSON FeatureCollection ─────────────────────────────
   const geojsonData = useMemo(() => {
-    const features = weatherData
+    const features = filteredWeatherData
       .filter(
         (m) =>
           m.latitude != null &&
@@ -294,7 +324,16 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
       type: 'FeatureCollection',
       features,
     };
-  }, [weatherData]);
+  }, [filteredWeatherData]);
+
+  // Risk Level Dropdown Options
+  const riskFilterOptions = useMemo(() => [
+    { value: 'ALL', label: 'All Risk Levels', badge: `${weatherData.length}`, color: '#3b82f6' },
+    { value: 'RED', label: 'Critical Risk', badge: 'High Alert', color: '#ef4444' },
+    { value: 'ORANGE', label: 'Moderate Risk', badge: 'Alert', color: '#f97316' },
+    { value: 'YELLOW', label: 'Minor Risk', badge: 'Warning', color: '#eab308' },
+    { value: 'BLUE', label: 'Normal / Low Risk', badge: 'Normal', color: '#22c55e' },
+  ], [weatherData.length]);
 
   // ── Step 5: Handle Map Feature Click ──────────────────────────────────────
   const handleMapClick = useCallback((event) => {
@@ -320,10 +359,39 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
   }
 
   return (
-    <div className="relative w-full h-screen min-h-[600px] rounded-2xl overflow-hidden shadow-sm">
-      {/* ── Floating Map Toggle Switch Overlay (Unconditional & z-50) ── */}
-      <div className={`absolute top-4 z-50 transition-all duration-300 ${selectedMuni ? 'left-4 md:left-[280px]' : 'left-4'}`}>
+    <div className={`relative w-full ${isFullscreen ? 'h-screen rounded-none border-0 shadow-none' : 'h-screen min-h-[600px] rounded-2xl shadow-sm'} overflow-hidden`}>
+      {/* ── Floating Controls Overlay: Toggle Switch + Standalone SearchInput & Custom Dropdown ── */}
+      <div className={`absolute top-4 z-50 flex flex-wrap items-center gap-2.5 pointer-events-auto transition-all duration-300 ${selectedMuni ? 'left-4 md:left-[280px]' : 'left-4'}`}>
         <MapToggleSwitch activeTab={activeTab} onTabChange={handleTabChange} />
+
+        {/* Standalone SearchInput */}
+        <SearchInput
+          placeholder="Search LGU name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-44 sm:w-56 bg-white/95 backdrop-blur-md shadow-md border border-gray-200/80 rounded-xl"
+        />
+
+        {/* Custom MapFilterDropdown */}
+        <MapFilterDropdown
+          options={riskFilterOptions}
+          value={filterCategory}
+          onChange={setFilterCategory}
+          placeholder="Risk Level"
+        />
+
+        {/* Maximize Button to open map-only in a new tab */}
+        {!isFullscreen && (
+          <button
+            type="button"
+            onClick={() => window.open('/fullscreen-map?view=risk', '_blank')}
+            className="flex items-center justify-center bg-white/95 backdrop-blur-md border border-gray-200/90 shadow-md hover:shadow-lg hover:border-gray-300 rounded-xl p-2.5 text-gray-700 hover:text-primary transition-all cursor-pointer select-none"
+            title="Open map only in new tab"
+            aria-label="Maximize map in new tab"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        )}
       </div>
 
       {/* ── Map with WebGL Layer Rendering ── */}
@@ -441,6 +509,16 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
                 )}
 
                 <Row icon={<Thermometer className='text-gray-600 size-5' />} label="Temperature" value={selectedMuni.temperature} unit=" °C" />
+                {selectedMuni.heat_index != null && (
+                  <Row 
+                    icon={<Sun className='text-amber-500 size-5' />} 
+                    label="Heat Index" 
+                    value={`${selectedMuni.heat_index} °C (${selectedMuni.heat_index_category || 'Normal'})`} 
+                  />
+                )}
+                {selectedMuni.humidity != null && (
+                  <Row icon={<Droplets className='text-blue-500 size-5' />} label="Humidity" value={selectedMuni.humidity} unit=" %" />
+                )}
                 <Row icon={<CloudRain className='text-gray-600 size-5' />} label="Rainfall" value={selectedMuni.rainfall_mm} unit=" mm/h" />
                 <Row icon={<Wind className='text-gray-600 size-5' />} label="Wind Speed" value={selectedMuni.wind_speed} unit=" m/s" />
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Map, { Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
-import { Waves, Mountain, Compass, Satellite, Building, CloudLightning, Activity, X, ShieldAlert } from 'lucide-react';
+import { Waves, Mountain, Compass, Satellite, Building, CloudLightning, Activity, X, ShieldAlert, Maximize2 } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import HazardMapToogleButton from '../monitoring/HazardMapToogleButton';
 import HazardVerticalFilter from '../monitoring/HazardVerticalFilter';
@@ -14,7 +14,7 @@ const SSA_METADATA = {
   4: { range: '> 3.0m', desc: 'Catastrophic Surge / Extreme Coastal Threat', title: 'Advisory 4' },
 };
 
-export default function HazardMap() {
+export default function HazardMap({ isFullscreen = false }) {
   const [activeHazard, setActiveHazard] = useState('flood'); // 'flood' | 'landslide' | 'storm-surge' | 'earthquake'
   const [activeSSA, setActiveSSA] = useState(1); // 1 | 2 | 3 | 4
   const [floodFilter, setFloodFilter] = useState('all'); // 'all' | 1 | 2 | 3
@@ -167,7 +167,7 @@ export default function HazardMap() {
   const interactiveLayerIds = activeHazard === 'earthquake' ? ['fault-lines-main'] : [];
 
   return (
-    <div className="relative w-full h-[calc(100vh-140px)] min-h-[550px] rounded-3xl overflow-hidden border border-gray-200 shadow-xl bg-gray-900 group">
+    <div className={`relative w-full ${isFullscreen ? 'h-screen rounded-none border-0 shadow-none' : 'h-screen min-h-[600px] rounded-2xl border border-gray-200 shadow-sm'} overflow-hidden bg-gray-900 group`}>
       {/* Mapbox Canvas */}
       <Map
         ref={mapRef}
@@ -411,6 +411,19 @@ export default function HazardMap() {
             <Satellite className={`size-4 ${isSatellite ? 'text-white animate-pulse' : 'text-primary'}`} />
             <span>{isSatellite ? 'Satellite Mode ON' : 'Satellite View'}</span>
           </button>
+
+          {/* Maximize Button to open map-only in a new tab */}
+          {!isFullscreen && (
+            <button
+              type="button"
+              onClick={() => window.open(`/fullscreen-map?view=hazard`, '_blank')}
+              className="flex items-center justify-center bg-white/95 backdrop-blur-md border border-gray-200/80 shadow-md hover:shadow-lg hover:border-gray-300 rounded-xl p-2.5 text-gray-700 hover:text-primary transition-all cursor-pointer select-none"
+              title="Open map only in new tab"
+              aria-label="Maximize map in new tab"
+            >
+              <Maximize2 className="size-4" />
+            </button>
+          )}
         </div>
 
         {/* Row 2: Vertical Hazard Filter Card */}

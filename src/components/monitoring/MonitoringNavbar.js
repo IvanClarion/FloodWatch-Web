@@ -8,6 +8,7 @@ import ToogleButtonLayout from "../button/ToogleButtonLayout"
 const navLinks = [
   { name: "Weather", href: "/provincial-admin/monitoring", exact: true },
   { name: "Air", href: "/provincial-admin/monitoring/air-map" },
+  { name: "Heat Index", href: "/provincial-admin/monitoring/heat-index-map" },
   { name: "Hazards", href: "/provincial-admin/monitoring/hazard-map" },
   { name: "Report", href: "/provincial-admin/monitoring/report-map" },
   { name: "LGU", href: "/provincial-admin/monitoring/lgu-monitoring" }
@@ -17,7 +18,7 @@ export default function MonitoringNavbar() {
   const pathname = usePathname()
 
   return (
-    <ToogleButtonLayout className='w-full lg:w-lg'>
+    <ToogleButtonLayout className='w-full lg:w-2xl'>
       {navLinks.map((link) => {
         const isActive = link.exact
           ? pathname === link.href || pathname === `${link.href}/`

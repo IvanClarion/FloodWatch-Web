@@ -2,13 +2,15 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Map, { Source, Layer, NavigationControl } from 'react-map-gl/mapbox';
-import { X, Leaf, Microscope, Waves, Wind, Info, Clock } from 'lucide-react';
+import { X, Leaf, Microscope, Waves, Wind, Info, Clock, Filter, Maximize2 } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/supabase/util/supabase';
 import GeneralCard from '../cards/GeneralCard';
 import CardHeader from '../cards/CardHeader';
 import CardSubHeader from '../cards/CardSubHeader';
 import CardBasedText from '../cards/CardBasedText';
+import SearchInput from '@/components/forms/SearchInput';
+import MapFilterDropdown from './MapFilterDropdown';
 
 // ─── Layer Style Definitions for GPU Canvas Rendering ──────────────────────
 const pinCircleLayer = {
@@ -107,10 +109,12 @@ const Row = ({ icon, label, value, unit = '' }) => (
   </div>
 );
 
-export default function AirQualityMap() {
+export default function AirQualityMap({ isFullscreen = false }) {
   const [airData, setAirData] = useState([]);
   const [selectedMuni, setSelectedMuni] = useState(null);
   const [cursor, setCursor] = useState('auto');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('ALL');
 
   useEffect(() => {
     // Fetch directly from main tables: municipality_or_city, air_quality, weather_telemetry
@@ -176,7 +180,7 @@ export default function AirQualityMap() {
 
     fetchData();
 
-    // Realtime: Listen to ALL events (INSERT, UPDATE, DELETE) across telemetry tables
+    // Realtime: Listen to ALL events across telemetry tables
     const channelId = `realtime-air-quality-map-${Date.now()}`;
     const realtimeChannel = supabase
       .channel(channelId)
@@ -212,9 +216,23 @@ export default function AirQualityMap() {
     };
   }, []);
 
-  // ── Step 1: Memoized GeoJSON FeatureCollection ─────────────────────────────
+  // Filter dataset based on SearchInput and category dropdown
+  const filteredAirData = useMemo(() => {
+    return airData.filter((item) => {
+      const matchSearch = searchQuery.trim() === '' || 
+        item.municipality_name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+
+      if (!matchSearch) return false;
+
+      if (filterCategory === 'ALL') return true;
+      const cat = getAqiCategory(item.aqi);
+      return String(cat) === filterCategory;
+    });
+  }, [airData, searchQuery, filterCategory]);
+
+  // Memoized GeoJSON FeatureCollection
   const geojsonData = useMemo(() => {
-    const features = airData
+    const features = filteredAirData
       .filter(
         (m) =>
           m.latitude != null &&
@@ -238,9 +256,9 @@ export default function AirQualityMap() {
       type: 'FeatureCollection',
       features,
     };
-  }, [airData]);
+  }, [filteredAirData]);
 
-  // ── Step 5: Handle Map Canvas Click ───────────────────────────────────────
+  // Handle Map Canvas Click
   const handleMapClick = useCallback((event) => {
     const feature = event.features && event.features[0];
     if (feature) {
@@ -256,10 +274,51 @@ export default function AirQualityMap() {
   const handleMouseEnter = useCallback(() => setCursor('pointer'), []);
   const handleMouseLeave = useCallback(() => setCursor('auto'), []);
 
-  const activeDetails = selectedMuni ? getAqiDetails(selectedMuni.aqi) : null;
+  // AQI Dropdown Options
+  const aqiFilterOptions = useMemo(() => [
+    { value: 'ALL', label: 'All Categories', badge: `${airData.length}`, color: '#3b82f6' },
+    { value: '1', label: 'Good', badge: '0 – 25', color: '#22c55e' },
+    { value: '2', label: 'Fair', badge: '25.1 – 35', color: '#eab308' },
+    { value: '3', label: 'Unhealthy for Sensitive', badge: '35.1 – 45', color: '#f97316' },
+    { value: '4', label: 'Very Unhealthy', badge: '45.1 – 55', color: '#ef4444' },
+    { value: '5', label: 'Acutely Unhealthy', badge: '55.1 – 90', color: '#a855f7' },
+    { value: '6', label: 'Emergency', badge: '91+', color: '#800000' },
+  ], [airData.length]);
 
   return (
-    <div className="relative w-full h-[85vh] xl:h-screen min-h-[600px] rounded-2xl overflow-hidden shadow-sm border border-gray-200/80">
+    <div className={`relative w-full ${isFullscreen ? 'h-screen rounded-none border-0 shadow-none' : 'h-[85vh] xl:h-screen min-h-[600px] rounded-2xl border border-gray-200/80 shadow-sm'} overflow-hidden`}>
+
+      {/* ── Top Bar Overlay: Standalone SearchInput & Custom Dropdown ── */}
+      <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-2.5 pointer-events-auto">
+        {/* Standalone SearchInput */}
+        <SearchInput
+          placeholder="Search LGU name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-48 sm:w-60 bg-white/95 backdrop-blur-md shadow-md border border-gray-200/80 rounded-xl"
+        />
+
+        {/* Custom MapFilterDropdown */}
+        <MapFilterDropdown
+          options={aqiFilterOptions}
+          value={filterCategory}
+          onChange={setFilterCategory}
+          placeholder="Filter Category"
+        />
+
+        {/* Maximize Button to open map-only in a new tab */}
+        {!isFullscreen && (
+          <button
+            type="button"
+            onClick={() => window.open('/fullscreen-map?view=air', '_blank')}
+            className="flex items-center justify-center bg-white/95 backdrop-blur-md border border-gray-200/90 shadow-md hover:shadow-lg hover:border-gray-300 rounded-xl p-2.5 text-gray-700 hover:text-primary transition-all cursor-pointer select-none"
+            title="Open map only in new tab"
+            aria-label="Maximize map in new tab"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        )}
+      </div>
 
       {/* ── Mapbox Canvas with WebGL GPU Rendering ── */}
       <Map
@@ -275,7 +334,6 @@ export default function AirQualityMap() {
       >
         <NavigationControl position="top-right" />
 
-        {/* ── Step 3 & 4: Single GeoJSON Source + GPU Circle & Symbol Layers ── */}
         <Source id="air-quality-source" type="geojson" data={geojsonData} cluster={false}>
           <Layer {...pinCircleLayer} />
           <Layer {...pinLabelLayer} />
@@ -311,91 +369,81 @@ export default function AirQualityMap() {
         </div>
       </div>
 
-      {/* ── Floating Detail Panel (Top-Left) ── */}
+      {/* ── Floating Detail Panel (Top-Left under search) ── */}
       {selectedMuni && (
         <div
-          className="absolute top-4 left-4 z-20 w-[280px] md:w-[320px] bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden transition-all animate-slide-left"
+          className="absolute top-18 left-4 z-20 w-[280px] md:w-[320px] bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden transition-all animate-slide-left"
         >
           <GeneralCard className="p-0 border-none shadow-none">
             
-            {/* Panel Header */}
-            <div className="p-4 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between">
+            {/* Header with Close Button */}
+            <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50/50">
               <div>
-                <CardHeader className="text-gray-800 capitalize text-lg font-extrabold">
+                <CardHeader className="text-sm font-bold text-gray-900 capitalize">
                   {selectedMuni.municipality_name}
                 </CardHeader>
-                <CardBasedText className="text-gray-400 text-xs">
-                  Municipality Air Monitor
+                <CardBasedText className="text-[11px] text-gray-400 font-medium">
+                  Air Quality & Environmental Status
                 </CardBasedText>
               </div>
               <button
+                className="modal-icon-button hover:bg-gray-200"
                 onClick={() => setSelectedMuni(null)}
-                className="modal-icon-button bg-gray-200/60 hover:bg-gray-200"
-                aria-label="Close panel"
+                aria-label="Close"
               >
-                <X className="size-5 text-gray-500" />
+                <X className="size-4 text-gray-500" />
               </button>
             </div>
 
-            {/* Panel Body */}
-            <div className="p-4 grid gap-4 max-h-[75vh] overflow-y-auto">
+            {/* Content Body */}
+            <div className="p-4 grid gap-4">
               
-              {/* AQI Primary Status Box */}
-              <div className={`p-4 rounded-xl flex flex-col gap-2 border ${activeDetails.bg} border-gray-200/50`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={activeDetails.iconBg}>
-                      <Leaf className="size-5" />
+              {/* Primary AQI Alert Card */}
+              {activeDetails && (
+                <div className={`p-4 rounded-xl border flex items-center justify-between ${activeDetails.bg} border-gray-100`}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-white shadow-xs">
+                      <Leaf className="size-5" style={{ color: activeDetails.color }} />
                     </div>
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                      Air Quality
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Current Air Quality</span>
+                      <h4 className="text-base font-extrabold text-gray-800 leading-tight">
+                        {activeDetails.label}
+                      </h4>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black" style={{ color: activeDetails.color }}>
+                      {selectedMuni.aqi != null ? selectedMuni.aqi : '—'}
                     </span>
+                    <span className="text-[10px] block font-bold text-gray-400">AQI</span>
                   </div>
                 </div>
-                <div className="flex items-baseline justify-between mt-1">
-                  <span className="text-3xl font-extrabold" style={{ color: activeDetails.color }}>
-                    {selectedMuni.aqi != null ? selectedMuni.aqi : '—'} 
-                    <span className="text-xs font-semibold text-gray-500 ml-1">AQI</span>
-                  </span>
-                  <span className="text-sm font-bold text-gray-800 text-right">
-                    {activeDetails.label}
-                  </span>
-                </div>
-              </div>
+              )}
 
-              {/* Detailed Metrics */}
-              <div>
-                <CardSubHeader className="text-gray-700 text-sm font-bold mb-2 flex items-center gap-1.5">
-                  <Wind className="size-4 text-primary" /> Pollutant Density
+              {/* Particulate Matter Readings */}
+              <div className="grid gap-1">
+                <CardSubHeader className="text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">
+                  Pollutant Metrics
                 </CardSubHeader>
-                <div className="bg-gray-50/60 rounded-xl p-3 border border-gray-100">
-                  <Row 
-                    icon={<Microscope className="size-4 text-primary" />} 
-                    label="Particulate Matter (PM2.5)" 
-                    value={selectedMuni.pm2_5} 
-                    unit=" µg/m³" 
-                  />
-                  <Row 
-                    icon={<Waves className="size-4 text-primary" />} 
-                    label="Coarse Particles (PM10)" 
-                    value={selectedMuni.pm10} 
-                    unit=" µg/m³" 
-                  />
-                </div>
+                <Row icon={<Microscope className="size-4 text-indigo-500" />} label="PM2.5 (Fine particles)" value={selectedMuni.pm2_5} unit=" µg/m³" />
+                <Row icon={<Waves className="size-4 text-sky-500" />} label="PM10 (Coarse particles)" value={selectedMuni.pm10} unit=" µg/m³" />
+                <Row icon={<Wind className="size-4 text-teal-500" />} label="Wind Speed" value={selectedMuni.wind_speed} unit=" m/s" />
               </div>
 
-              {/* Timestamp Indicator */}
-              <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-gray-400 text-[11px] font-medium">
+              {/* Timestamp */}
+              <div className="pt-2 border-t border-gray-100 text-[11px] text-gray-400 flex items-center justify-between">
                 <span className="flex items-center gap-1">
-                  <Clock className="size-3.5" /> Recorded At
+                  <Clock className="size-3.5" /> Fetched
                 </span>
-                <span>
-                  {selectedMuni.air_recorded_at 
-                    ? new Date(selectedMuni.air_recorded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                    : 'Recent'}
+                <span className="font-semibold text-gray-600">
+                  {selectedMuni.air_recorded_at
+                    ? new Date(selectedMuni.air_recorded_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : selectedMuni.fetched_at
+                    ? new Date(selectedMuni.fetched_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : "Realtime"}
                 </span>
               </div>
-
             </div>
           </GeneralCard>
         </div>
