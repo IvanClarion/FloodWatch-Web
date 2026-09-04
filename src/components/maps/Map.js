@@ -168,7 +168,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
         const [munisRes, weatherRes, airRes] = await Promise.all([
           supabase.from('municipality_or_city').select('*'),
           supabase.from('weather_telemetry').select('*').order('fetched_at', { ascending: false }),
-          supabase.from('air_quality').select('*').order('recorded_at', { ascending: false })
+          supabase.from('air_quality').select('*').order('recorded_at', { ascending: false }).order('created_at', { ascending: false })
         ]);
 
         const munis = munisRes.data || [];
@@ -177,13 +177,18 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
 
         const mergedData = munis.map((muni) => {
           const mId = muni.municipality_id;
-          const latestWeather = weatherRecords.find((w) => w.municipality_id === mId) || {};
-          const latestAir = airRecords.find((a) => a.municipality_id === mId) || {};
+          const latestWeather = weatherRecords.find((w) => String(w.municipality_id) === String(mId)) || {};
+          const latestAir = airRecords.find((a) => String(a.municipality_id) === String(mId)) || {};
 
           const latVal = muni.center_latitude ?? muni.latitude;
           const lngVal = muni.center_longitude ?? muni.longitude;
           const lat = parseFloat(latVal);
           const lng = parseFloat(lngVal);
+
+          // Resolve PM2.5 from any column name variant
+          const rawPm25 = latestAir.pm2_5 ?? latestAir['pm2.5'] ?? latestAir.pm25 ?? latestAir.pm_2_5 ?? null;
+          const rawPm10 = latestAir.pm10 ?? latestAir.pm_10 ?? null;
+          const rawAqi = latestAir.aqi != null ? Number(latestAir.aqi) : null;
 
           return {
             ...muni,
@@ -204,9 +209,9 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
             fetched_at: latestWeather.fetched_at ?? null,
 
             // Air quality from air_quality
-            aqi: latestAir.aqi != null ? Number(latestAir.aqi) : null,
-            pm2_5: latestAir.pm2_5 != null ? Number(latestAir.pm2_5) : null,
-            pm10: latestAir.pm10 != null ? Number(latestAir.pm10) : null,
+            aqi: rawAqi,
+            pm2_5: rawPm25 != null && rawPm25 !== '' ? Number(rawPm25) : null,
+            pm10: rawPm10 != null && rawPm10 !== '' ? Number(rawPm10) : null,
             air_quality_status: latestAir.status ?? null,
             air_recorded_at: latestAir.recorded_at ?? null,
           };
