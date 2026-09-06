@@ -274,7 +274,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     [124.50, 11.50],
   ];
 
-  // Filter dataset based on SearchInput and Risk level dropdown
+  // Filter dataset based on SearchInput and Risk level dropdown (Rainfall Hazard only)
   const filteredWeatherData = useMemo(() => {
     return weatherData.filter((item) => {
       const name = item.name || item.municipality_name || '';
@@ -284,9 +284,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
       if (!matchSearch) return false;
 
       if (filterCategory === 'ALL') return true;
-      const rSev = rainSeverity(item.rainfall_mm);
-      const aSev = aqiSeverity(item.aqi);
-      const severity = Math.max(rSev, aSev);
+      const severity = rainSeverity(item.rainfall_mm);
 
       if (filterCategory === 'RED') return severity >= 3;
       if (filterCategory === 'ORANGE') return severity === 2;
@@ -297,7 +295,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     });
   }, [weatherData, searchQuery, filterCategory]);
 
-  // ── Step 1: Memoized GeoJSON FeatureCollection ─────────────────────────────
+  // ── Step 1: Memoized GeoJSON FeatureCollection (Pin colors based on rainfall only) ──
   const geojsonData = useMemo(() => {
     const features = filteredWeatherData
       .filter(
@@ -308,9 +306,8 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
           isFinite(m.longitude)
       )
       .map((muni) => {
-        const rSev = rainSeverity(muni.rainfall_mm);
-        const aSev = aqiSeverity(muni.aqi);
-        const severity = Math.max(rSev, aSev);
+        // Pin color is strictly determined by rainfall intensity
+        const severity = rainSeverity(muni.rainfall_mm);
 
         return {
           type: 'Feature',
@@ -331,13 +328,13 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     };
   }, [filteredWeatherData]);
 
-  // Risk Level Dropdown Options
+  // Risk Level Dropdown Options (Rainfall Hazard levels)
   const riskFilterOptions = useMemo(() => [
     { value: 'ALL', label: 'All Risk Levels', badge: `${weatherData.length}`, color: '#3b82f6' },
-    { value: 'RED', label: 'Critical Risk', badge: 'High Alert', color: '#ef4444' },
-    { value: 'ORANGE', label: 'Moderate Risk', badge: 'Alert', color: '#f97316' },
-    { value: 'YELLOW', label: 'Minor Risk', badge: 'Warning', color: '#eab308' },
-    { value: 'BLUE', label: 'Normal / Low Risk', badge: 'Normal', color: '#22c55e' },
+    { value: 'RED', label: 'Critical (Torrential/Intense)', badge: '≥30 mm', color: '#ef4444' },
+    { value: 'ORANGE', label: 'High (Heavy Rain)', badge: '15-30 mm', color: '#f97316' },
+    { value: 'YELLOW', label: 'Warning (Moderate Rain)', badge: '7.5-15 mm', color: '#eab308' },
+    { value: 'BLUE', label: 'Normal (Light/No Rain)', badge: '<7.5 mm', color: '#22c55e' },
   ], [weatherData.length]);
 
   // ── Step 5: Handle Map Feature Click ──────────────────────────────────────
@@ -360,13 +357,13 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
 
   // Immediately display Weather Telemetry map when the tab toggle switch is flipped
   if (activeTab === 'Weather Telemetry') {
-    return <WeatherMap activeTab={activeTab} onTabChange={handleTabChange} />;
+    return <WeatherMap activeTab={activeTab} onTabChange={handleTabChange} isFullscreen={isFullscreen} />;
   }
 
   return (
     <div className={`relative w-full ${isFullscreen ? 'h-screen rounded-none border-0 shadow-none' : 'h-screen min-h-[600px] rounded-2xl shadow-sm'} overflow-hidden`}>
       {/* ── Floating Controls Overlay: Toggle Switch + Standalone SearchInput & Custom Dropdown ── */}
-      <div className={`absolute top-4 z-50 flex flex-wrap items-center gap-2.5 pointer-events-auto transition-all duration-300 ${selectedMuni ? 'left-4 md:left-[280px]' : 'left-4'}`}>
+      <div className="absolute top-4 left-4 z-30 flex flex-wrap items-center gap-2.5 pointer-events-auto">
         <MapToggleSwitch activeTab={activeTab} onTabChange={handleTabChange} />
 
         {/* Standalone SearchInput */}
@@ -420,41 +417,27 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
         </Source>
       </Map>
 
-      {/* ── Floating detail panel (left side) ── */}
+      {/* ── Floating detail panel (Bottom drawer on mobile, left drawer on tablet/desktop) ── */}
       {selectedMuni && (
         <div
           key={selectedMuni.municipality_id}
-          style={{
-            position: 'absolute',
-            top: '12px',
-            left: '12px',
-            bottom: '12px',
-            width: '260px',
-            zIndex: 10,
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'panelSlideIn 0.28s cubic-bezier(0.16,1,0.3,1) both',
-          }}
+          className="absolute z-40 flex flex-col pointer-events-auto transition-all duration-300
+            inset-x-3 bottom-3 top-auto max-h-[60vh]
+            sm:inset-x-auto sm:left-4 sm:top-20 sm:bottom-4 sm:w-[310px] sm:max-h-none sm:h-auto"
         >
-          <style>{`
-            @keyframes panelSlideIn {
-              from { opacity: 0; transform: translateX(-18px); }
-              to   { opacity: 1; transform: translateX(0); }
-            }
-          `}</style>
-
-          <GeneralCard className="flex flex-col gap-0 p-0 h-full overflow-hidden">
+          <GeneralCard className="flex flex-col gap-0 p-0 h-full overflow-hidden shadow-2xl border border-gray-200 bg-white/95 backdrop-blur-md rounded-2xl">
 
             {/* ── Panel header ── */}
-            <div className='flex items-center justify-between'>
+            <div className='flex items-center justify-between p-3.5 sm:p-4 border-b border-gray-100 bg-gray-50/80'>
               <div>
-                <CardHeader className="text-gray-500 capitalize text-base">
+                <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">LGU Telemetry</span>
+                <CardHeader className="text-gray-900 capitalize text-base font-black leading-tight">
                   {selectedMuni.municipality_name}
                 </CardHeader>
               </div>
               <button
                 onClick={() => setSelectedMuni(null)}
-                className='modal-icon-button'
+                className='hover:bg-gray-200 p-1.5 rounded-full transition-colors cursor-pointer text-gray-500'
                 aria-label="Close panel"
               >
                 <X className='size-5' />
@@ -462,7 +445,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
             </div>
 
             {/* ── Scrollable body ── */}
-            <div style={{ overflowY: 'auto', flex: 1, padding: '12px 14px 14px' }}>
+            <div className="overflow-y-auto flex-1 p-3.5 sm:p-4 grid gap-3">
               <div className='grid gap-3'>
                 {/* Weather section */}
                 <CardSubHeader>

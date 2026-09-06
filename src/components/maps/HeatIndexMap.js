@@ -472,8 +472,7 @@ export default function HeatIndexMap({ isFullscreen = false }) {
       {selectedMuni && selectedDetails && (
         <div
           key={selectedMuni.municipality_id}
-          className="absolute top-20 left-4 bottom-4 w-80 z-30 flex flex-col pointer-events-auto"
-          style={{ animation: 'panelSlideIn 0.28s cubic-bezier(0.16,1,0.3,1) both' }}
+          className="absolute z-40 flex flex-col pointer-events-auto transition-all duration-300 inset-x-3 bottom-3 top-auto max-h-[60vh] sm:inset-x-auto sm:left-4 sm:top-20 sm:bottom-4 sm:w-80 sm:max-h-none"
         >
           <style>{`
             @keyframes panelSlideIn {

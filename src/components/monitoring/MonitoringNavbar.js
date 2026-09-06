@@ -2,8 +2,6 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import ToogleButton from "../button/ToogleButton"
-import ToogleButtonLayout from "../button/ToogleButtonLayout"
 
 const navLinks = [
   { name: "Weather", href: "/provincial-admin/monitoring", exact: true },
@@ -18,20 +16,29 @@ export default function MonitoringNavbar() {
   const pathname = usePathname()
 
   return (
-    <ToogleButtonLayout className='w-full lg:w-2xl'>
-      {navLinks.map((link) => {
-        const isActive = link.exact
-          ? pathname === link.href || pathname === `${link.href}/`
-          : pathname?.startsWith(link.href)
+    <nav className="w-full overflow-x-auto no-scrollbar py-1">
+      <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl min-w-max w-fit lg:w-2xl">
+        {navLinks.map((link) => {
+          const isActive = link.exact
+            ? pathname === link.href || pathname === `${link.href}/`
+            : pathname?.startsWith(link.href)
 
-        return (
-          <ToogleButton key={link.name} className={isActive ? "button-toogle-active" : ""}>
-            <Link href={link.href} className="w-full block text-center">
+          return (
+            <Link
+              key={link.name}
+              href={link.href}
+              className={`shrink-0 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 text-center select-none flex-1 min-w-[72px] sm:min-w-[85px] ${
+                isActive
+                  ? "bg-white text-primary shadow-xs font-bold"
+                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+              }`}
+            >
               {link.name}
             </Link>
-          </ToogleButton>
-        )
-      })}
-    </ToogleButtonLayout>
+          )
+        })}
+      </div>
+    </nav>
   )
 }
+
