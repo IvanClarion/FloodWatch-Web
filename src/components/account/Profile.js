@@ -153,10 +153,8 @@ export default function Profile() {
                 <Pencil className="w-4 h-4" />
                 Edit Profile
               </PrimaryButton>
-            </div>
-            <div className="w-full flex justify-center text-center items-center">
-              <div className="text-xs text-red-500 font-semibold">
-              <SignOutBtn />
+              <div className="w-full mt-1">
+                <SignOutBtn />
               </div>
             </div>
         </GeneralCard>

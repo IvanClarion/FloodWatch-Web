@@ -91,14 +91,22 @@ export default function UserModal({ invitationId, onClose }) {
   
   // Account Data to Display
   const email = profile?.email || invitation.official_email
-  const roleName = invitation.account_role === "lgu_headmaster" ? "LGU Headmaster" : "Provincial Admin"
+  const roleName = invitation.account_role === "lgu_headmaster" ? "LGU Headmaster" : invitation.account_role === "national_admin" ? "National Admin" : "Provincial Admin"
   const orgName = profile?.organization_name || "Not specified"
   const phone = profile?.mobile_number || "Not specified"
   const joinedDate = profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : new Date(invitation.created_at).toLocaleDateString()
   const verificationStatus = profile?.is_verified ? "Verified" : "Not Verified"
-  const provinceName = invitation.lgu_name || "Not specified"
-  // Assuming municipality might be added later, for now we fallback
-  const municipalityName = "Not specified"
+  
+  // Parse Province & Municipality from lgu_name (e.g., 'Alcantara, Cebu' or 'Cebu')
+  let provinceName = invitation.lgu_name || "Not specified"
+  let municipalityName = "Not specified"
+  if (invitation.lgu_name && invitation.lgu_name.includes(",")) {
+    const parts = invitation.lgu_name.split(",").map((s) => s.trim())
+    municipalityName = parts[0] || "Not specified"
+    provinceName = parts[1] || "Not specified"
+  } else if (invitation.account_role === "lgu_headmaster") {
+    municipalityName = invitation.lgu_name || "Not specified"
+  }
 
   // Status Banner styling
   let statusBannerClass = "default-banner"

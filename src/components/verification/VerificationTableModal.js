@@ -2,13 +2,13 @@
 import { useState, useEffect } from "react"
 import CardBasedText from "../cards/CardBasedText"
 import CardSubHeader from "../cards/CardSubHeader"
-import { X, CheckCircle2, XCircle, FileImage, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, CheckCircle2, XCircle, FileImage, ChevronLeft, ChevronRight } from "lucide-react"
 import SideModal from "../Modal/SideModal"
 import { supabase } from "@/supabase/util/supabase"
 import SingleLineSkeleton from "../skeleton/SingleLineSkeleton"
 import SquareSkeleton from "../skeleton/SquareSkeleton"
-export default function VerificationTableModal({ data, onClose, onStatusUpdate }) {
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
+export default function VerificationTableModal({ data, onClose }) {
   const [imageError, setImageError] = useState(false)
   const [userName, setUserName] = useState("Loading...")
   const [isLoading, setIsLoading] = useState(true)
@@ -60,57 +60,6 @@ export default function VerificationTableModal({ data, onClose, onStatusUpdate }
   }, [data?.user_id])
 
   if (!data) return null;
-
-  const handleUpdateStatus = async (newStatus) => {
-    setIsSubmitting(true)
-    try {
-      // Get current admin session
-      const { data: { session } } = await supabase.auth.getSession()
-      const reviewerId = session?.user?.id || null
-
-      // Update the id_verification record
-      const { error: verificationError } = await supabase
-        .from('id_verification')
-        .update({
-          status: newStatus,
-          reviewed_by: reviewerId,
-          is_read: true,
-        })
-        .eq('id_verification_id', data.id_verification_id)
-
-      if (verificationError) {
-        console.error("Error updating verification status:", verificationError)
-        return
-      }
-
-      // Update profiles.is_verified based on the new status
-      const isVerified = newStatus === 'approved' || newStatus === 'Verified'
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ is_verified: isVerified })
-        .eq('id', data.user_id)
-
-      if (profileError) {
-        console.error("Error updating profile verification:", profileError)
-      }
-
-      // Notify parent to refresh data
-      if (onStatusUpdate) {
-        onStatusUpdate()
-      }
-      
-      // Dispatch custom event so sibling components (like SummaryData) can refetch
-      window.dispatchEvent(new Event('verification_status_updated'))
-      
-      onClose()
-    } catch (err) {
-      console.error("Unexpected error:", err)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Read status is now updated when the action button in the table is clicked
 
   return (
     <SideModal className="z-50">
@@ -274,26 +223,15 @@ export default function VerificationTableModal({ data, onClose, onStatusUpdate }
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="pt-4 border-t border-gray-100 flex gap-3 shrink-0">
-          {data.status.toLowerCase() === 'pending' && (
-            <>
-             <button
-               className="success-button"
-               onClick={() => handleUpdateStatus('approved')}
-               disabled={isSubmitting}
-             >
-               {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : 'Approve'}
-             </button>
-             <button
-               className="danger-button"
-               onClick={() => handleUpdateStatus('rejected')}
-               disabled={isSubmitting}
-             >
-               {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : 'Reject'}
-             </button>
-            </>
-          )}
+        {/* Footer */}
+        <div className="pt-4 border-t border-gray-100 flex justify-end shrink-0">
+          <button
+            type="button"
+            className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all cursor-pointer text-center"
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </SideModal>

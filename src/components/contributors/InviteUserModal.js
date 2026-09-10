@@ -197,20 +197,22 @@ export default function InviteUserModal({ onClose }) {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       const inviteCode = crypto.randomUUID()
 
+      // Format LGU display name (e.g., 'Alcantara, Cebu' for LGU Headmaster, 'Cebu' for Provincial Admin)
+      const resolvedLguName = selectedRole === "national_admin"
+        ? null
+        : selectedRole === "lgu_headmaster" && selectedMunicipality
+          ? `${selectedMunicipality}, ${lguName}`
+          : lguName
+
       // Insert into invitations table
       const insertData = {
-        lgu_name: selectedRole === "national_admin" ? null : lguName,
+        lgu_name: resolvedLguName,
         official_email: email,
         account_role: selectedRole,
         status: 'pending',
         invited_by: user.id,
         expires_at: expiresAt,
         invite_code: inviteCode
-      }
-
-      // Add municipality if LGU headmaster
-      if (selectedRole === "lgu_headmaster" && selectedMunicipality) {
-        insertData.municipality = selectedMunicipality
       }
 
       const { data: invite, error: insertError } = await supabase
@@ -236,7 +238,7 @@ export default function InviteUserModal({ onClose }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email,
-            lguName,
+            lguName: resolvedLguName || lguName || "National",
             role: selectedRole,
             inviteCode
           })
