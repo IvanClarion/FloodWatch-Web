@@ -29,10 +29,11 @@ const pinCircleLayer = {
     'circle-color': [
       'match',
       ['get', 'severity'],
-      3, '#ef4444', // red
-      2, '#f97316', // orange
-      1, '#eab308', // yellow
-      '#0035A9'     // default primary blue
+      3, '#ef4444', // Red (Critical: Torrential/Intense >= 15 mm)
+      2, '#f97316', // Orange (High: Heavy Rain 7.5-15 mm)
+      1, '#eab308', // Yellow (Warning: Moderate Rain 2.5-7.5 mm)
+      0, '#0035A9', // Blue (Normal: Light/No Rain < 2.5 mm)
+      '#0035A9'     // Default Blue
     ],
     'circle-stroke-width': 2,
     'circle-stroke-color': '#ffffff',
@@ -88,12 +89,16 @@ const getRainfallCategory = (mm) => {
   return 'Torrential Rain';
 };
 
-// ─── Rainfall severity (0-3) ─────────────────────────────────────────────────
+// ─── Rainfall severity (0-3) according to PAGASA Standards ───────────────────
+// • 3 (Critical - Red #ef4444): Torrential / Intense (≥ 15 mm/hr)
+// • 2 (High - Orange #f97316): Heavy Rain (7.5 to 15 mm/hr)
+// • 1 (Warning - Yellow #eab308): Moderate Rain (2.5 to 7.5 mm/hr)
+// • 0 (Normal - Blue #0035A9): Light / No Rain (< 2.5 mm/hr)
 const rainSeverity = (mm) => {
-  if (mm >= 30) return 3; // red
-  if (mm >= 15) return 2; // orange
-  if (mm >= 7.5) return 1; // yellow
-  return 0;
+  if (mm == null || mm < 2.5) return 0; // Normal (Blue)
+  if (mm < 7.5) return 1;              // Warning (Yellow: 2.5-7.5 mm)
+  if (mm < 15.0) return 2;             // High (Orange: 7.5-15 mm)
+  return 3;                            // Critical (Red: >= 15 mm)
 };
 
 // ─── AQI severity (0-3) ──────────────────────────────────────────────────────
@@ -126,7 +131,7 @@ const getSeverityIconClass = (severity) => {
   if (severity >= 3) return 'summary-data-icon-red';
   if (severity === 2) return 'summary-data-icon-orange';
   if (severity === 1) return 'summary-data-icon-yellow';
-  return 'summary-data-icon'; // Default (blue)
+  return 'summary-data-icon'; // Normal (Primary Blue)
 };
 
 // ─── Severity Background Helper ──────────────────────────────────────────────
@@ -134,7 +139,7 @@ const getSeverityBgClass = (severity) => {
   if (severity >= 3) return 'bg-red-50';
   if (severity === 2) return 'bg-orange-50';
   if (severity === 1) return 'bg-yellow-50';
-  return 'bg-gray-100'; // Default
+  return 'bg-blue-50'; // Normal (Blue)
 };
 
 // ─── Air Quality Status → Background Color ────────────────────────────────────
@@ -274,7 +279,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     [124.50, 11.50],
   ];
 
-  // Filter dataset based on SearchInput and Risk level dropdown (Rainfall Hazard only)
+  // Filter dataset based on SearchInput and Risk level dropdown (PAGASA Rainfall Hazard only)
   const filteredWeatherData = useMemo(() => {
     return weatherData.filter((item) => {
       const name = item.name || item.municipality_name || '';
@@ -289,7 +294,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
       if (filterCategory === 'RED') return severity >= 3;
       if (filterCategory === 'ORANGE') return severity === 2;
       if (filterCategory === 'YELLOW') return severity === 1;
-      if (filterCategory === 'BLUE') return severity === 0;
+      if (filterCategory === 'GREEN' || filterCategory === 'BLUE') return severity === 0;
 
       return true;
     });
@@ -328,13 +333,13 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
     };
   }, [filteredWeatherData]);
 
-  // Risk Level Dropdown Options (Rainfall Hazard levels)
+  // Risk Level Dropdown Options (PAGASA Rainfall Hazard levels & Measurements)
   const riskFilterOptions = useMemo(() => [
-    { value: 'ALL', label: 'All Risk Levels', badge: `${weatherData.length}`, color: '#3b82f6' },
-    { value: 'RED', label: 'Critical (Torrential/Intense)', badge: '≥30 mm', color: '#ef4444' },
-    { value: 'ORANGE', label: 'High (Heavy Rain)', badge: '15-30 mm', color: '#f97316' },
-    { value: 'YELLOW', label: 'Warning (Moderate Rain)', badge: '7.5-15 mm', color: '#eab308' },
-    { value: 'BLUE', label: 'Normal (Light/No Rain)', badge: '<7.5 mm', color: '#22c55e' },
+    { value: 'ALL', label: 'All Risk Levels', badge: `${weatherData.length}`, color: '#64748b' },
+    { value: 'RED', label: 'Critical (Torrential/Intense)', badge: '≥15 mm/hr', color: '#ef4444' },
+    { value: 'ORANGE', label: 'High (Heavy Rain)', badge: '7.5-15 mm/hr', color: '#f97316' },
+    { value: 'YELLOW', label: 'Warning (Moderate Rain)', badge: '2.5-7.5 mm/hr', color: '#eab308' },
+    { value: 'BLUE', label: 'Normal (Light/No Rain)', badge: '<2.5 mm/hr', color: '#0035A9' },
   ], [weatherData.length]);
 
   // ── Step 5: Handle Map Feature Click ──────────────────────────────────────
@@ -473,12 +478,12 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
                     background: (rainSeverity(selectedMuni.rainfall_mm) >= 3 ? '#ef4444' :
                                  rainSeverity(selectedMuni.rainfall_mm) === 2 ? '#f97316' :
                                  rainSeverity(selectedMuni.rainfall_mm) === 1 ? '#eab308' :
-                                 '#3b82f6') + '14',
+                                 '#0035A9') + '14',
                     border: `1px solid ${
                       rainSeverity(selectedMuni.rainfall_mm) >= 3 ? '#ef4444' :
                       rainSeverity(selectedMuni.rainfall_mm) === 2 ? '#f97316' :
                       rainSeverity(selectedMuni.rainfall_mm) === 1 ? '#eab308' :
-                      '#3b82f6'
+                      '#0035A9'
                     }33`,
                     marginBottom: '2px',
                   }}>
@@ -489,7 +494,7 @@ export default function FloodWatchMap({ activeTab: externalTab, onTabChange: ext
                       color: rainSeverity(selectedMuni.rainfall_mm) >= 3 ? '#dc2626' :
                              rainSeverity(selectedMuni.rainfall_mm) === 2 ? '#ea580c' :
                              rainSeverity(selectedMuni.rainfall_mm) === 1 ? '#ca8a04' :
-                             '#2563eb',
+                             '#0035A9',
                     }}>
                       {selectedMuni.rainfall_category}
                     </span>
