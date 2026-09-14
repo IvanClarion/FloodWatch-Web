@@ -20,7 +20,7 @@ export async function POST(request) {
     const roleName = role === 'lgu_headmaster' ? 'LGU Headmaster' : 'Provincial Admin'
 
     const { data, error } = await resend.emails.send({
-      from: 'FloodWatch <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM_EMAIL || 'FloodWatch <onboarding@floodwatch.site>',
       to: [email],
       subject: `You're Invited to FloodWatch — ${roleName}`,
       html: `
